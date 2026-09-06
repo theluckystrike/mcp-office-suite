@@ -1,0 +1,40 @@
+{
+  "name": "@theluckystrike/mcp-price-tracker",
+  "version": "0.20.0",
+  "description": "Ask your AI what something costs right now, track price drops and get told when a target price is hit. All data stays local.",
+  "type": "module",
+  "bin": {
+    "mcp-price-tracker": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "server.json"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "price-tracking",
+    "price-drop",
+    "shopping",
+    "deals"
+  ],
+  "license": "MIT",
+  "author": "theluckystrike",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/theluckystrike/mcp-servers",
+    "directory": "servers/price-tracker"
+  },
+  "homepage": "https://github.com/theluckystrike/mcp-servers/tree/main/servers/price-tracker",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@theluckystrike/mcp-license": "file:../mcp-license",
+    "zod": "^3.25.0"
+  }
+}

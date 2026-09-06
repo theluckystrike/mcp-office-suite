@@ -1,0 +1,61 @@
+{
+  "name": "@theluckystrike/mcp-office-suite",
+  "version": "0.20.0",
+  "description": "One install for the whole freelancer office suite: time tracking, price watching, spreadsheets and PDF invoicing, proxied behind a single MCP server.",
+  "type": "module",
+  "bin": {
+    "mcp-office-suite": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "server.json"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node -e \"import('node:fs').then(f=>f.chmodSync('dist/index.js',0o755))\"",
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "bundle",
+    "office",
+    "time-tracking",
+    "invoicing",
+    "spreadsheet",
+    "price-tracking",
+    "freelance"
+  ],
+  "license": "MIT",
+  "author": "theluckystrike",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/theluckystrike/mcp-servers",
+    "directory": "servers/office-suite"
+  },
+  "homepage": "https://github.com/theluckystrike/mcp-servers/tree/main/servers/office-suite",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@theluckystrike/mcp-time-tracker": "file:vendor/mcp-time-tracker",
+    "@theluckystrike/mcp-price-tracker": "file:vendor/mcp-price-tracker",
+    "@theluckystrike/mcp-spreadsheet": "file:vendor/mcp-spreadsheet",
+    "@theluckystrike/mcp-invoice": "file:vendor/mcp-invoice",
+    "@theluckystrike/mcp-currency": "file:vendor/mcp-currency",
+    "@theluckystrike/mcp-timezone": "file:vendor/mcp-timezone",
+    "@theluckystrike/mcp-docx": "file:vendor/mcp-docx",
+    "@theluckystrike/mcp-resume": "file:vendor/mcp-resume",
+    "@theluckystrike/mcp-recurring": "file:vendor/mcp-recurring",
+    "@theluckystrike/mcp-clauses": "file:vendor/mcp-clauses",
+    "@theluckystrike/mcp-pdf": "file:vendor/mcp-pdf",
+    "@theluckystrike/mcp-calendar": "file:vendor/mcp-calendar"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}

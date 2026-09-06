@@ -1,0 +1,564 @@
+#!/usr/bin/env node
+import { existsSync, statSync } from "node:fs";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { createLicenseGate, readSharedProfile } from "@theluckystrike/mcp-license";
+import { z } from "zod";
+import { DAILY_MAX_AGE_MS, DAILY_URL, HISTORY_MAX_AGE_MS, HISTORY_URL, PUBLISH_NOTE, baseUrl, getDaily, getHistory, latestDay, } from "./ecb.js";
+import { currencyDecimals, isIsoDate, isoDaysAgo, isoToday } from "./money.js";
+import { BASE, codesOf, convertAmount, perEur, resolveDate, series, stats, unknownCode } from "./rates.js";
+import { dailyPath, dataDir, historyPath, loadDaily, loadHistory } from "./store.js";
+import { VERSION } from "./version.js";
+const PRODUCT = "currency";
+/** Free reads the last 90 days of history. Pro reads the whole series back to 1999-01-04. */
+const FREE_HISTORY_DAYS = 90;
+const gate = createLicenseGate({ product: PRODUCT });
+const ok = (text) => ({ content: [{ type: "text", text }] });
+const fail = (text) => ({ content: [{ type: "text", text: `Error: ${text}` }], isError: true });
+const json = (v) => ok(JSON.stringify(v, null, 2));
+/** A limit hit is information, not a transport error: isError stays false. */
+const gated = (text) => ok(text);
+const code = (name) => z.string().regex(/^[A-Za-z]{3}$/, `${name} must be a 3-letter ISO code such as EUR`);
+const norm = (s) => s.trim().toUpperCase();
+/**
+ * A model that has read "4,500 EUR" off a receipt will hand the string through unless the
+ * schema says otherwise, so the type error names the fix instead of only the type.
+ */
+const AMOUNT = z.number({
+    invalid_type_error: 'amount must be a JSON number, not a string: send 4500.5, not "4,500.50" (no thousands separator, no currency symbol)',
+    required_error: "amount is required",
+}).finite();
+function dateNote(d) {
+    const bits = [`Rate date: ${d.date} (ECB reference rate).`];
+    if (d.offline_note)
+        bits.push(d.offline_note);
+    return bits.join(" ");
+}
+/** The free window is a read limit, never a silent truncation: the caller is always told. */
+function freeCutoff() { return isoDaysAgo(FREE_HISTORY_DAYS); }
+/** `days` calendar days before an ISO date, as an ISO date. */
+function isoDaysBefore(date, days) {
+    return new Date(Date.parse(`${date}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
+}
+const server = new McpServer({ name: "mcp-currency", version: VERSION }, { capabilities: { tools: {}, resources: {}, prompts: {} } });
+/* -------------------------------------------------------------------- rates_latest */
+/**
+ * Profile-first sweep. The currency you invoice in is business identity, held once behind
+ * the token as the shared profile's default_currency, not a fact to ask a caller for on
+ * every call. "Convert 100 USD into my currency" and "give me the fx_rates for this
+ * rebill" both know the target already. An explicit argument always wins and is never
+ * annotated; with neither, the tool refuses by naming business_set rather than guessing.
+ */
+function profileCurrency() {
+    const c = readSharedProfile().default_currency;
+    return c && /^[A-Za-z]{3}$/.test(c.trim()) ? c.trim().toUpperCase() : undefined;
+}
+function needCurrency(explicit, what) {
+    if (explicit)
+        return { code: norm(explicit), fromProfile: false };
+    const p = profileCurrency();
+    if (p)
+        return { code: p, fromProfile: true };
+    return `no ${what} currency: pass it, or set one once in the shared business profile ` +
+        `(the invoice server's business_set, field default_currency) and every server in this suite uses it.`;
+}
+server.registerTool("rates_latest", {
+    title: "Latest ECB reference rates",
+    description: "Call this tool for the most recent European Central Bank daily reference rates, re-expressed against any base. Returns the rates, the ECB rate date they belong to, and how old the local cache is.",
+    inputSchema: {
+        base: code("base").optional().describe("Base currency; defaults to the shared business profile's default_currency, else EUR. A rate of 1.0812 for USD means 1 base = 1.0812 USD. Cross rates go through the euro, the only pair the ECB publishes"),
+        quotes: z.array(code("quote")).max(200).optional().describe("Only these currencies, at most 200. Omit for all of them"),
+    },
+}, async (a) => {
+    try {
+        const d = await getDaily();
+        const base = norm(a.base ?? profileCurrency() ?? BASE);
+        const baseFromProfile = !a.base && !!profileCurrency();
+        const br = perEur(d.data.rates, base);
+        if (br === undefined)
+            return fail(unknownCode(base, d.data.rates));
+        const wanted = a.quotes?.length ? a.quotes.map(norm) : codesOf(d.data.rates).filter((c) => c !== base);
+        const rates = {};
+        const missing = [];
+        for (const c of wanted) {
+            const r = perEur(d.data.rates, c);
+            if (r === undefined) {
+                missing.push(c);
+                continue;
+            }
+            rates[c] = Number((r / br).toFixed(6));
+        }
+        if (missing.length && !Object.keys(rates).length)
+            return fail(unknownCode(missing[0], d.data.rates));
+        return json({
+            base, date: d.data.date, rates,
+            base_source: baseFromProfile ? "the shared business profile's default_currency" : undefined,
+            meaning: `1 ${base} = this many units of each currency`,
+            unknown_codes: missing.length ? missing : undefined,
+            source: "European Central Bank euro foreign exchange reference rates",
+            note: `${dateNote({ ...d.data, ...d })} ${PUBLISH_NOTE}`,
+        });
+    }
+    catch (e) {
+        return fail(String(e.message ?? e));
+    }
+});
+/* ------------------------------------------------------------------------ convert */
+async function ratesForDate(dateArgIn) {
+    let dateArg = dateArgIn;
+    if (!dateArg) {
+        const d = await getDaily();
+        return { rates: d.data.rates, date: d.data.date, exact: true, note: `${dateNote({ ...d.data, ...d })} ${PUBLISH_NOTE}` };
+    }
+    if (!isIsoDate(dateArg))
+        return { error: `date must be YYYY-MM-DD, got "${dateArg}".` };
+    if (dateArg > isoToday())
+        return { error: `${dateArg} is in the future; the ECB has not published it yet.` };
+    // D-R71: rate_history SHORTENS a window wider than the free tier and says which window it
+    // really covered; asking for ONE date beyond it used to look nothing up and answer with a
+    // price. A caller then has an upgrade pitch where a rate should be. A date older than the
+    // free window is now CLAMPED to the oldest day the free tier reads, the answer is real,
+    // and every field that names a date says plainly it is not the date that was asked for.
+    let clampedFrom = "";
+    if (!gate.isPro() && dateArg < freeCutoff()) {
+        clampedFrom = dateArg;
+        dateArg = freeCutoff();
+    }
+    const h = await getHistory();
+    if (clampedFrom) {
+        // The clamp has to move FORWARD. resolveDate falls back to the nearest previous
+        // published day, so clamping to the cutoff and resolving landed back before it - on
+        // the very date the free tier is not allowed to read, while the answer claimed it had
+        // been shortened. The clamped date is the first day the ECB published on or after the
+        // cutoff, and it is exact by construction.
+        const cutoff = dateArg;
+        const first = Object.keys(h.data.days).sort().find((d) => d >= cutoff);
+        if (!first)
+            return { error: `the rate history cache holds nothing on or after ${cutoff}.` };
+        dateArg = first;
+    }
+    const r = resolveDate(h.data.days, dateArg);
+    if ("error" in r)
+        return { error: r.error };
+    // A date the cache does not reach is not the same fact as a date the ECB did not publish.
+    // Only a gap INSIDE the cached range is a weekend or a TARGET holiday; a date after the
+    // cache's newest day is simply not cached yet, and the caller is told so, along with
+    // whether this call went to the ECB to look for it.
+    const latest = latestDay(h.data.days);
+    const refreshNote = h.refreshed
+        ? "The history was refreshed from the ECB on this call."
+        : h.offline_note
+            ? "A refresh was attempted on this call and failed."
+            : `No refresh was attempted: the cached history is less than ${HISTORY_MAX_AGE_MS / 3_600_000} hours old.`;
+    const note = r.exact
+        ? `Rate date: ${r.date} (ECB reference rate). ${PUBLISH_NOTE}`
+        : latest !== undefined && dateArg > latest
+            ? `No rate published yet in the cache for ${dateArg} (latest ${latest}). ${refreshNote} The last published rate on or before ${dateArg} was used: ${r.date}. ${PUBLISH_NOTE}`
+            : `No ECB rate was published on ${dateArg} (weekend or TARGET holiday), so the last published rate on or before it was used: ${r.date}. ${PUBLISH_NOTE}`;
+    const clampNote = clampedFrom
+        ? `Free tier reads ${FREE_HISTORY_DAYS} days back, so this is the rate on ${r.date}, NOT ${clampedFrom}: that date was not read and is not what any number here describes. ` +
+            gate.upgradeText("historical rates back to 1999") + " "
+        : "";
+    const full = `${clampNote}${note}`;
+    return {
+        rates: r.rates, date: r.date, asked: clampedFrom || dateArg, exact: r.exact,
+        shortened_from: clampedFrom || undefined,
+        note: h.offline_note ? `${full} ${h.offline_note}` : full,
+    };
+}
+server.registerTool("convert", {
+    title: "Convert an amount",
+    description: "Call this tool to convert an amount between any two ECB-quoted currencies, today or on a past date. Returns the converted amount, the cross rate to 6 decimals, the rounding applied and the rate date used.",
+    inputSchema: {
+        amount: AMOUNT.describe("Amount in major units of the from currency, e.g. 100 or 12.34"),
+        from: code("from").describe("Currency the amount is in. Cross rates go through the euro, the only pair the ECB publishes"),
+        to: code("to").optional().describe("Currency to convert into; defaults to the shared business profile's default_currency, so you are never asked what currency you invoice in. The result is rounded once, at the end, to this currency's own ISO 4217 minor units, so JPY comes back whole and BHD to three places"),
+        date: z.string().max(10).optional().describe("ISO date YYYY-MM-DD. Omit for the latest published rate. A weekend or TARGET holiday falls back to the last rate published on or before it, and the answer says so. A date older than the free 90-day window is shortened to the oldest free day, not refused, and the answer names the date it really used"),
+    },
+}, async (a) => {
+    try {
+        const target = needCurrency(a.to, "target");
+        if (typeof target === "string")
+            return fail(target);
+        const r = await ratesForDate(a.date);
+        if ("gatedText" in r)
+            return gated(r.gatedText);
+        if ("error" in r)
+            return fail(r.error);
+        const c = convertAmount(r.rates, a.amount, norm(a.from), target.code);
+        if ("error" in c)
+            return fail(c.error);
+        return json({
+            amount: a.amount, from: c.from, to: c.to,
+            to_source: target.fromProfile ? "the shared business profile's default_currency" : undefined,
+            rate: c.rate, rate_meaning: `1 ${c.from} = ${c.rate} ${c.to}`,
+            rate_exact: c.rate_exact,
+            rate_note: `rate is the cross rate rounded to 6 decimals for display; the conversion multiplied by the full-precision rate_exact and rounded once, at the end, to ${currencyDecimals(c.to)} decimal places. Recomputing from the 6-decimal rate can differ by a minor unit or two.`,
+            rate_date: r.date,
+            requested_date: r.asked,
+            shortened_from: r.shortened_from,
+            rate_date_is_not_requested_date: r.shortened_from ? `you asked for ${r.shortened_from}; the free window starts at ${r.date}` : undefined,
+            result: c.result,
+            result_number: c.result_number,
+            rounding: `rounded to ${currencyDecimals(c.to)} decimal places, the ISO 4217 minor units of ${c.to}`,
+            source: "European Central Bank",
+            note: r.note,
+        });
+    }
+    catch (e) {
+        return fail(String(e.message ?? e));
+    }
+});
+/* ------------------------------------------------------------------- convert_many */
+server.registerTool("convert_many", {
+    title: "Convert one amount into several currencies",
+    description: "One amount, one source currency, many targets, all off the same ECB rate date. Each result is rounded to that target's own minor units.",
+    inputSchema: {
+        amount: AMOUNT,
+        from: code("from"),
+        to: z.array(code("to")).min(1).max(60).describe("Target currencies"),
+    },
+}, async (a) => {
+    try {
+        const d = await getDaily();
+        const rows = [];
+        const unknown = [];
+        for (const t of a.to.map(norm)) {
+            const c = convertAmount(d.data.rates, a.amount, norm(a.from), t);
+            if ("error" in c) {
+                unknown.push(t);
+                continue;
+            }
+            rows.push({ to: c.to, rate: c.rate, rate_exact: c.rate_exact, result: c.result, result_number: c.result_number });
+        }
+        if (!rows.length)
+            return fail(unknownCode(unknown[0] ?? norm(a.from), d.data.rates));
+        return json({
+            amount: a.amount, from: norm(a.from), rate_date: d.data.date, results: rows,
+            unknown_codes: unknown.length ? unknown : undefined,
+            note: `${dateNote({ ...d.data, ...d })} ${PUBLISH_NOTE}`,
+        });
+    }
+    catch (e) {
+        return fail(String(e.message ?? e));
+    }
+});
+/* ------------------------------------------------------------------ fx_rates_for */
+server.registerTool("fx_rates_for", {
+    title: "FX rates in the shape expense-tracker wants",
+    description: "Call this tool when a rebill or an invoice spans more than one currency, instead of asking the user for rates. Returns the fx_rates object expense_to_invoice takes, plus the rate date to write on the invoice.",
+    inputSchema: {
+        target: code("target").optional().describe("The currency the invoice will be issued in; defaults to the shared business profile's default_currency. Pass it on as target_currency alongside the fx_rates object"),
+        currencies: z.array(code("currency")).min(1).max(60).describe("The other currencies present, e.g. [\"EUR\", \"GBP\"]. Direction: each returned rate means 1 unit of that key = X units of the target, so {\"EUR\": 1.08} is 1 EUR = 1.08 of the target. The target needs no rate of its own"),
+    },
+}, async (a) => {
+    try {
+        const picked = needCurrency(a.target, "target");
+        if (typeof picked === "string")
+            return fail(picked);
+        const d = await getDaily();
+        const target = picked.code;
+        const tr = perEur(d.data.rates, target);
+        if (tr === undefined)
+            return fail(unknownCode(target, d.data.rates));
+        const fx_rates = {};
+        const unknown = [];
+        for (const c of a.currencies.map(norm)) {
+            if (c === target)
+                continue; // expense_to_invoice needs no rate for the target's own group
+            const r = perEur(d.data.rates, c);
+            if (r === undefined) {
+                unknown.push(c);
+                continue;
+            }
+            fx_rates[c] = Number((tr / r).toFixed(6));
+        }
+        if (unknown.length && !Object.keys(fx_rates).length)
+            return fail(unknownCode(unknown[0], d.data.rates));
+        return json({
+            target_currency: target,
+            target_source: picked.fromProfile ? "the shared business profile's default_currency" : undefined,
+            fx_rates,
+            meaning: `1 unit of each key = that many ${target}`,
+            rate_date: d.data.date,
+            unknown_codes: unknown.length ? unknown : undefined,
+            next_step: `Pass this straight into expense_to_invoice {target_currency: "${target}", fx_rates: ${JSON.stringify(fx_rates)}}, then invoice_create with currency "${target}".`,
+            invoice_note: `Converted at ECB reference rates of ${d.data.date}.`,
+            note: `${dateNote({ ...d.data, ...d })} ${PUBLISH_NOTE}`,
+        });
+    }
+    catch (e) {
+        return fail(String(e.message ?? e));
+    }
+});
+/* ------------------------------------------------------------------ rate_history */
+server.registerTool("rate_history", {
+    title: "Rate history for a pair",
+    description: "Call this tool for the ECB rate of one currency pair across a window. Returns one row per published day plus the min, max, average and the change. A window wider than the free 90 days is shortened, not refused.",
+    inputSchema: {
+        from: code("from").describe("Base currency of the pair"),
+        to: code("to").describe("Quote currency of the pair. Each row is 1 from = X to"),
+        days: z.number().int().min(1).max(20000).optional().describe("Trailing window in calendar days, default 30. Only TARGET business days carry a rate, so 30 days holds about 21 rows. Free reads up to 90 days back; Pro reads the whole series back to 1999-01-04"),
+        from_date: z.string().max(10).optional().describe("ISO date, inclusive. Overrides days. Free is limited to the last 90 days"),
+        to_date: z.string().max(10).optional().describe("ISO date, inclusive, default today"),
+        max_rows: z.number().int().min(1).max(2000).optional().describe("Cap the table, default 200. min/max/avg still cover the whole window"),
+    },
+}, async (a) => {
+    try {
+        const today = isoToday();
+        let toDate = a.to_date ?? today;
+        if (!isIsoDate(toDate))
+            return fail(`to_date must be YYYY-MM-DD, got "${toDate}".`);
+        let fromDate;
+        if (a.from_date) {
+            if (!isIsoDate(a.from_date))
+                return fail(`from_date must be YYYY-MM-DD, got "${a.from_date}".`);
+            fromDate = a.from_date;
+        }
+        else {
+            fromDate = new Date(Date.parse(`${toDate}T00:00:00Z`) - (a.days ?? 30) * 86_400_000).toISOString().slice(0, 10);
+        }
+        if (fromDate > toDate)
+            return fail(`from_date ${fromDate} is after to_date ${toDate}.`);
+        // D-R55: a window wider than the free tier is SHORTENED to the free window and
+        // answered, with the cap and the Pro extension named in one line. A refusal here is
+        // recomputed by hand off whatever rate the caller can remember.
+        const pro = gate.isPro();
+        let capNote;
+        if (!pro) {
+            const cutoff = freeCutoff();
+            if (toDate < cutoff) {
+                return gated(`${toDate} is older than the ${FREE_HISTORY_DAYS} days the free tier reads (it goes back to ${cutoff}), so there is no part of that window the free tier can answer. Nothing was looked up. ` +
+                    gate.upgradeText("historical rates back to 1999", "rate_history"));
+            }
+            const earliest = [cutoff, isoDaysBefore(toDate, FREE_HISTORY_DAYS - 1)].sort().pop();
+            if (fromDate < earliest) {
+                const asked = fromDate;
+                fromDate = earliest;
+                capNote = `Free tier reads ${FREE_HISTORY_DAYS} days back, so this covers ${fromDate} to ${toDate} instead of ${asked}. ` +
+                    gate.upgradeText("the full series back to 1999", "rate_history");
+            }
+        }
+        const h = await getHistory();
+        const pts = series(h.data.days, norm(a.from), norm(a.to), fromDate, toDate);
+        if ("error" in pts)
+            return fail(pts.error);
+        const s = stats(pts);
+        const cap = a.max_rows ?? 200;
+        const shown = pts.length > cap ? pts.slice(pts.length - cap) : pts;
+        return json({
+            pair: `${norm(a.from)}/${norm(a.to)}`,
+            from_date: fromDate, to_date: toDate,
+            business_days: pts.length,
+            min: s.min, max: s.max, avg: s.avg,
+            first: s.first, last: s.last,
+            change_pct: s.change_pct,
+            rows_shown: shown.length,
+            rates: shown,
+            free_tier_note: capNote,
+            note: `Rate dates run ${pts[0].date} to ${pts[pts.length - 1].date}. ${PUBLISH_NOTE}${h.offline_note ? ` ${h.offline_note}` : ""}`,
+        });
+    }
+    catch (e) {
+        return fail(String(e.message ?? e));
+    }
+});
+/* ---------------------------------------------------------------------- rate_on */
+server.registerTool("rate_on", {
+    title: "Rate on a given date",
+    description: "Call this tool for the ECB rate of one pair on one date. Returns both directions and the rate date, so a reciprocal is never reported as the published figure. A date beyond the free window is shortened, never refused.",
+    inputSchema: {
+        from: code("from").describe("Base currency. The ECB quotes every currency per 1 euro, so \"the ECB rate for USD\" is from EUR to USD, not the other way round; invert only if the user asked for the inverse"),
+        to: code("to").describe("Quote currency. The rate returned is 1 from = X to"),
+        date: z.string().max(10).describe("ISO date YYYY-MM-DD. If the ECB published nothing that day - every weekend, 1 January, Good Friday, Easter Monday, 1 May, 25 and 26 December - the last rate published on or before it is returned and the answer names that date. Free covers the last 90 days: an older date is shortened to the oldest free day rather than refused, and rate_date says which day the numbers are really from. Pro covers every date back to 1999-01-04"),
+    },
+}, async (a) => {
+    try {
+        const r = await ratesForDate(a.date);
+        if ("gatedText" in r)
+            return gated(r.gatedText);
+        if ("error" in r)
+            return fail(r.error);
+        const c = convertAmount(r.rates, 1, norm(a.from), norm(a.to));
+        if ("error" in c)
+            return fail(c.error);
+        // D-C4: asked for "the ECB rate for USD" a caller can pick USD -> EUR and get 0.8589,
+        // the arithmetic reciprocal of the number the ECB actually publishes (1 EUR = 1.1643 USD).
+        // Both directions are now in the payload, and when the pair is quoted the other way round
+        // from the ECB's own convention the published direction is named explicitly.
+        const inv = convertAmount(r.rates, 1, norm(a.to), norm(a.from));
+        const inverse_rate = "error" in inv ? undefined : inv.rate;
+        const publishedNote = c.to === BASE && c.from !== BASE
+            ? `The ECB publishes this pair the other way round: 1 ${BASE} = ${inverse_rate} ${c.from} on ${r.date}. The ${c.rate} above is its reciprocal, ${c.from} priced in ${BASE}. If the user asked for "the ECB rate for ${c.from}", they almost certainly mean the published figure.`
+            : c.from === BASE
+                ? `This is the ECB's own published direction: every rate in the reference set is quoted per 1 ${BASE}.`
+                : `Neither side is ${BASE}. The ECB publishes no ${c.from}/${c.to} rate; this is the cross rate of the two published per-${BASE} rates on ${r.date}.`;
+        return json({
+            pair: `${c.from}/${c.to}`,
+            requested_date: a.date,
+            rate_date: r.date,
+            shortened_from: r.shortened_from,
+            rate_date_is_not_requested_date: r.shortened_from ? `you asked for ${r.shortened_from}; the free window starts at ${r.date}` : undefined,
+            exact: r.exact,
+            rate: c.rate,
+            rate_exact: c.rate_exact,
+            rate_meaning: `1 ${c.from} = ${c.rate} ${c.to} on ${r.date} (rate rounded to 6 decimals for display; rate_exact is the unrounded cross rate)`,
+            inverse_rate,
+            inverse_meaning: inverse_rate === undefined ? undefined : `1 ${c.to} = ${inverse_rate} ${c.from} on ${r.date}`,
+            ecb_quoting_convention: `the ECB quotes every currency per 1 ${BASE}`,
+            published_direction: publishedNote,
+            rule: "nearest previous business day: the last rate published on or before the date asked for",
+            note: r.note,
+        });
+    }
+    catch (e) {
+        return fail(String(e.message ?? e));
+    }
+});
+/* --------------------------------------------------------------- currencies_list */
+server.registerTool("currencies_list", {
+    title: "Currencies the ECB quotes",
+    description: "Every currency in the ECB daily reference set, with its rate against the euro and the number of decimal places it is rounded to. Anything not on this list cannot be converted here.",
+    inputSchema: {},
+}, async () => {
+    try {
+        const d = await getDaily();
+        const rows = codesOf(d.data.rates).map((c) => ({
+            code: c,
+            per_eur: c === BASE ? 1 : Number(d.data.rates[c].toFixed(6)),
+            decimals: currencyDecimals(c),
+        }));
+        return json({ date: d.data.date, count: rows.length, currencies: rows, note: `${dateNote({ ...d.data, ...d })} ${PUBLISH_NOTE}` });
+    }
+    catch (e) {
+        return fail(String(e.message ?? e));
+    }
+});
+/* ------------------------------------------------------------------ cache_status */
+function fileInfo(p) {
+    if (!existsSync(p))
+        return { path: p, exists: false };
+    const st = statSync(p);
+    return { path: p, exists: true, bytes: st.size, modified: new Date(st.mtimeMs).toISOString() };
+}
+server.registerTool("cache_status", {
+    title: "Rate cache status",
+    description: "What is cached on this machine, how old it is, and when it will next be refreshed. Answer this before trusting a rate on a machine that has been offline.",
+    inputSchema: {},
+}, async () => {
+    try {
+        let daily, history;
+        /**
+         * D-S3: reading the cache is also what discovers that it is corrupt, and the discovery
+         * moves the file. Swallowing that told the caller the cache was fine on the very call
+         * that quarantined it. A quarantine performed by THIS call is now an error, and it
+         * names the copy holding the original bytes.
+         */
+        const quarantined = [];
+        const note = (e) => {
+            const c = e;
+            if (c && c.justQuarantined && c.quarantined)
+                quarantined.push(c.quarantined);
+        };
+        try {
+            daily = loadDaily();
+        }
+        catch (e) {
+            note(e);
+            daily = undefined;
+        }
+        try {
+            history = loadHistory();
+        }
+        catch (e) {
+            note(e);
+            history = undefined;
+        }
+        if (quarantined.length) {
+            return fail(`the rate cache did not parse and was quarantined by this call; nothing was overwritten. ` +
+                `Original bytes kept at ${quarantined.join(" and ")}. ` +
+                `Delete the matching .corrupt marker file to let the next call re-download from the ECB.`);
+        }
+        const age = (t) => (t && Number.isFinite(Date.parse(t)) ? Math.round((Date.now() - Date.parse(t)) / 60000) : undefined);
+        const days = history ? Object.keys(history.days).sort() : [];
+        return json({
+            data_dir: dataDir(),
+            mode: gate.isPro() ? "pro" : "free",
+            source_base_url: baseUrl(),
+            daily: {
+                ...fileInfo(dailyPath()),
+                rate_date: daily?.date,
+                fetched_at: daily?.fetched_at,
+                age_minutes: age(daily?.fetched_at),
+                refresh_after_hours: DAILY_MAX_AGE_MS / 3_600_000,
+                url: DAILY_URL(),
+            },
+            history: {
+                ...fileInfo(historyPath()),
+                fetched_at: history?.fetched_at,
+                age_minutes: age(history?.fetched_at),
+                refresh_after_hours: HISTORY_MAX_AGE_MS / 3_600_000,
+                business_days: days.length,
+                earliest: days[0],
+                latest: days[days.length - 1],
+                url: HISTORY_URL(),
+            },
+            offline: "Once each file has been downloaded once, every tool answers from the cache with no network at all; the answer states the rate date so a stale rate is never passed off as today's.",
+            note: PUBLISH_NOTE,
+        });
+    }
+    catch (e) {
+        return fail(String(e.message ?? e));
+    }
+});
+/* ------------------------------------------------------------------- resources */
+server.registerResource("latest-rates", "fx://latest", {
+    title: "Latest ECB reference rates",
+    description: "The cached ECB daily reference rates against the euro, with the rate date.",
+    mimeType: "application/json",
+}, async (uri) => {
+    let body;
+    try {
+        const d = await getDaily();
+        body = { base: BASE, date: d.data.date, rates: d.data.rates, meaning: "1 EUR = this many units", note: PUBLISH_NOTE };
+    }
+    catch (e) {
+        body = { error: String(e.message ?? e) };
+    }
+    return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(body, null, 2) }] };
+});
+/* --------------------------------------------------------------------- prompts */
+server.registerPrompt("convert_invoice_lines", {
+    title: "Invoice a multi-currency set in one currency",
+    description: "Chain this server with the expense tracker and the invoice server: fetch the rates, rebill in one currency, issue the invoice.",
+    argsSchema: {
+        project: z.string().describe("Project or client to bill"),
+        target_currency: z.string().describe("Currency the invoice is issued in, e.g. USD"),
+        from: z.string().optional().describe("ISO start date"),
+        to: z.string().optional().describe("ISO end date"),
+    },
+}, ({ project, target_currency, from, to }) => {
+    const t = (target_currency || "USD").toUpperCase();
+    const f = from || isoDaysAgo(30);
+    const e = to || isoToday();
+    return {
+        messages: [{
+                role: "user",
+                content: {
+                    type: "text",
+                    text: [
+                        `Invoice ${project} for everything unbilled between ${f} and ${e}, in ${t}. Do it with the tools, do not ask me for exchange rates:`,
+                        `1. expense_to_invoice {project: "${project}", from: "${f}", to: "${e}"} first, with no target_currency, to see which currencies are actually present.`,
+                        `2. fx_rates_for {target: "${t}", currencies: [<every other currency it returned>]} on this server. It returns fx_rates in exactly the shape expense_to_invoice takes, plus the rate date.`,
+                        `3. expense_to_invoice again with target_currency: "${t}" and that fx_rates object. Every line now carries what it was and at what rate.`,
+                        `4. invoice_create with currency "${t}" and those line items. Put "Converted at ECB reference rates of <rate date>" in the invoice notes so the client can check the arithmetic.`,
+                        `5. Tell me the invoice number, the total, and the rate date you used. If the rate date is not the invoice date, say so.`,
+                    ].join("\n"),
+                },
+            }],
+    };
+});
+gate.registerTools(server);
+const transport = new StdioServerTransport();
+await server.connect(transport);
+process.stderr.write(`mcp-currency ready (${gate.isPro() ? "pro" : "free"}), cache in ${dataDir()}, source ${baseUrl()}\n`);
