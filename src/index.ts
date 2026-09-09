@@ -61,6 +61,7 @@ const CHILDREN: ChildDef[] = [
   { id: "work-order", pkg: "@theluckystrike/mcp-work-order", optional: true },
   { id: "catalogue", pkg: "@theluckystrike/mcp-catalogue", optional: true },
   { id: "change-order", pkg: "@theluckystrike/mcp-change-order", optional: true },
+  { id: "delivery-schedule", pkg: "@theluckystrike/mcp-delivery-schedule", optional: true },
 ];
 
 /** Resolve the absolute path to a sibling server's dist/index.js. */
@@ -302,12 +303,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     ...[...toolIndex.values()].map(t => ({ ...t.definition, name: t.name })),
     {
       name: "license_status",
-      description: "Show whether each server in the bundle (time-tracker, price-tracker, spreadsheet, invoice, expense-tracker) runs free or Pro, and where to upgrade the whole bundle.",
+      description: "Report the licence tier of every server connected to this bundle, one row each, plus the single checkout URL that upgrades them all. A server that failed to start is reported with its error.",
       inputSchema: { type: "object", properties: {} },
     },
     {
       name: "license_activate",
-      description: "Activate a Pro license key for every server in the bundle at once (format MCPL1.xxx.yyy).",
+      description: "Activate one Pro key on every connected server in a single call and return which accepted it. Any rejection fails the whole call, because one server on Pro and another free is invisible to the user.",
       inputSchema: { type: "object", properties: { key: { type: "string", description: "License key from the checkout confirmation page" } }, required: ["key"] },
     },
   ];
