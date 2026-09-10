@@ -2,7 +2,7 @@
 
 <!-- mirror-seo:start -->
 
-**MCP server for back office work: invoices, PDFs, spreadsheets, Word documents, time tracking and expenses.** One install that exposes every tool of all 31 servers, 292 of them.
+**MCP server for small business accounting and paperwork: invoices, PDFs, spreadsheets, Word documents, time tracking and expenses.** One install that exposes every tool of all 31 servers, 292 of them.
 
 Works with Claude Desktop, Claude Code, Cursor and any Model Context Protocol client. Runs on your own machine, or hosted with no install.
 
