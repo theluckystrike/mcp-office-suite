@@ -1,14 +1,45 @@
 # mcp-office-suite
 
+<!-- mirror-seo:start -->
+
+**MCP server for back office work: invoices, PDFs, spreadsheets, Word documents, time tracking and expenses.** One install that exposes every tool of all 31 servers, 292 of them.
+
+Works with Claude Desktop, Claude Code, Cursor and any Model Context Protocol client. Runs on your own machine, or hosted with no install.
+
+## Install
+
+**Hosted, nothing to install.** Point an MCP client at `https://mcp.zovo.one/mcp/office-suite` over streamable-http and send `Authorization: Bearer <token>`, where the token is a Pro key or a free anonymous one from <https://mcp.zovo.one/mcp/token>.
+
+**Claude Desktop, one click.** Download `office-suite.mcpb` from the [latest release](https://github.com/theluckystrike/mcp-servers/releases/latest) and double-click it.
+
+**From source.** The mirror is self-contained: every `@theluckystrike/*` dependency is vendored, so a fresh clone builds with no extra setup.
+
+```sh
+git clone https://github.com/theluckystrike/mcp-office-suite.git
+cd mcp-office-suite
+npm install && npm run build
+```
+
+Then point your client at the built entry point:
+
+```json
+{
+  "mcpServers": {
+    "office-suite": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-office-suite/dist/index.js"]
+    }
+  }
+}
+```
+
+> `@theluckystrike/mcp-office-suite` is **not published on npm yet**, so an `npx -y @theluckystrike/mcp-office-suite` command will fail. The three paths above are the working ones and each is exercised by CI.
+
 ![office-suite demo](https://raw.githubusercontent.com/theluckystrike/mcp-servers/main/assets/demo-office-suite.gif)
-
-**One-click install:** download `office-suite.mcpb` from the [latest release](https://github.com/theluckystrike/mcp-servers/releases/latest) and double-click it in Claude Desktop.
-
-**Hosted endpoint (no install):** `https://mcp.zovo.one/mcp/office-suite` (streamable-http; send `Authorization: Bearer <Pro key or anonymous token from https://mcp.zovo.one/mcp/token>`).
 
 Read-only mirror of [mcp-servers/servers/office-suite](https://github.com/theluckystrike/mcp-servers/tree/main/servers/office-suite). See [MIRROR.md](MIRROR.md).
 
-
+<!-- mirror-seo:end -->
 
 One install for the whole freelancer office. This MCP server proxies all 31 sibling servers in this repository, so a client gets every one of their 292 tools behind a single config entry instead of 31. The child list is published at runtime as the `office://tools_map` resource, which is the only figure to trust: it is read from the running server, not from this file. Under the hood it starts each sibling as its own stdio child process, forwards `tools/call`, `resources/*` and `prompts/*` to whichever child owns the name, and merges their license state into one `license_status` / `license_activate` pair. Nothing is re-implemented: each child server runs exactly as it does standalone, with its own local JSON storage.
 
