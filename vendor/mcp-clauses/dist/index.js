@@ -47,10 +47,38 @@ function expandPath(p) {
  * processes writing a derived path would both pass the check and the second would clobber
  * the first. A path this server derived itself gets -2, -3, ... instead.
  */
+/**
+ * Create a directory and any missing ancestors, without mkdirSync's recursive mode.
+ *
+ * mkdirSync(recursive) never returns on a pseudo-filesystem: measured on Linux in a
+ * node:22-alpine container, mkdir("/proc/nope") answers ENOENT in 0 ms, Node reads that as
+ * a missing parent and retries forever, and the call had not returned after 25 seconds. Any
+ * caller-supplied output path under /proc, /sys or /dev hung the server permanently. The
+ * ancestors are walked here under a hard bound and each level is created non-recursively,
+ * so a repeated ENOENT terminates on the first one. Verified on Linux: /proc throws ENOENT
+ * and /sys throws EROFS, both in 0 ms, while a normal nested path still succeeds.
+ */
+function ensureDirBounded(dir) {
+    if (existsSync(dir))
+        return;
+    const missing = [];
+    let cur = dir;
+    for (let i = 0; i < 64 && !existsSync(cur); i++) {
+        missing.push(cur);
+        const parent = dirname(cur);
+        if (parent === cur)
+            break;
+        cur = parent;
+    }
+    if (!existsSync(cur))
+        throw new Error(`cannot create ${dir}: no existing ancestor directory`);
+    for (const d of missing.reverse())
+        mkdirSync(d);
+}
 function outputPath(out, fallbackName, ext, overwrite = false) {
     const p = expandPath(out ?? join(dataDir(), "documents", fallbackName));
     const withExt = p.toLowerCase().endsWith(ext) ? p : `${p}${ext}`;
-    mkdirSync(dirname(withExt), { recursive: true });
+    ensureDirBounded(dirname(withExt));
     if (out !== undefined) {
         // An explicit path is still reserved with an exclusive create: a second contract
         // written to a path a signed document already occupies would otherwise destroy it
@@ -342,7 +370,7 @@ server.registerTool("clause_search", {
             query: a.query, count: hits.length,
             jurisdiction: a.jurisdiction,
             free_tier_note: tagsGated
-                ? `Free tier filters by query, category and jurisdiction; the tag filter (${a.tags.join(", ")}) was not applied. ${gate.upgradeText("tag filters in search", "clause_search")}`
+                ? `Free tier filters by query, category and jurisdiction; the tag filter (${a.tags.join(", ")}) was not applied. clause_list is free and returns every clause's tags, so the tagged matches are one free call away. ${gate.upgradeText("tag filters in search", "clause_search")}`
                 : undefined,
             results: hits.slice(0, 25).map((h) => ({ score: h.score, ...summary(h.clause) })),
         });
@@ -437,7 +465,7 @@ server.registerTool("clause_export", {
         const db = load();
         const list = orderByCategory(db.clauses);
         const file = expandPath(a.path);
-        mkdirSync(dirname(file), { recursive: true });
+        ensureDirBounded(dirname(file));
         if (a.overwrite !== true) {
             try {
                 closeSync(openSync(file, "wx"));

@@ -2,15 +2,11 @@
 
 <!-- mirror-seo:start -->
 
-**MCP server for small business accounting and paperwork: invoices, PDFs, spreadsheets, Word documents, time tracking and expenses.** One install that exposes every tool of all 31 servers, 292 of them.
+**MCP server for small business accounting and paperwork: invoices, PDFs, spreadsheets, Word documents, time tracking and expenses.** One install that exposes every tool of all 41 servers, 380 of them.
 
-Works with Claude Desktop, Claude Code, Cursor and any Model Context Protocol client. Runs on your own machine, or hosted with no install.
+Works with Claude Desktop, Claude Code, Cursor and any Model Context Protocol client. Runs on your own machine: this one has no hosted endpoint, so install it from the bundle or from source.
 
 ## Install
-
-**Hosted, nothing to install.** Get a token from <https://mcp.zovo.one/mcp/connect> (the connect page) or <https://mcp.zovo.one/mcp/token> (the same token as JSON); a free anonymous one is issued on the spot and a Pro key works the same way. Then point an MCP client at `https://mcp.zovo.one/mcp/office-suite` over streamable-http and send the token as `Authorization: Bearer <token>`.
-
-If your client cannot set headers, put the token in the path instead: `https://mcp.zovo.one/mcp/office-suite/t/<token>`. Both forms work. The bare URL with no token answers 401 on `tools/call`, so the token is not optional.
 
 **Claude Desktop, one click.** Download `office-suite.mcpb` from the [latest release](https://github.com/theluckystrike/mcp-servers/releases/latest) and double-click it.
 
@@ -42,6 +38,9 @@ Then point your client at the built entry point:
 Read-only mirror of [mcp-servers/servers/office-suite](https://github.com/theluckystrike/mcp-servers/tree/main/servers/office-suite). See [MIRROR.md](MIRROR.md).
 
 <!-- mirror-seo:end -->
+
+**In the [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.theluckystrike%2Foffice-suite-time-invoice-expense-excel-price/versions/latest)** (`io.github.theluckystrike/office-suite-time-invoice-expense-excel-price`).
+
 
 One install for the whole freelancer office. This MCP server proxies all 31 sibling servers in this repository, so a client gets every one of their 292 tools behind a single config entry instead of 31. The child list is published at runtime as the `office://tools_map` resource, which is the only figure to trust: it is read from the running server, not from this file. Under the hood it starts each sibling as its own stdio child process, forwards `tools/call`, `resources/*` and `prompts/*` to whichever child owns the name, and merges their license state into one `license_status` / `license_activate` pair. Nothing is re-implemented: each child server runs exactly as it does standalone, with its own local JSON storage.
 

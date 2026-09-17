@@ -67,10 +67,38 @@ function expandPath(p) {
 function slug(s) {
     return s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "document";
 }
+/**
+ * Create a directory and any missing ancestors, without mkdirSync's recursive mode.
+ *
+ * mkdirSync(recursive) never returns on a pseudo-filesystem: measured on Linux in a
+ * node:22-alpine container, mkdir("/proc/nope") answers ENOENT in 0 ms, Node reads that as
+ * a missing parent and retries forever, and the call had not returned after 25 seconds. Any
+ * caller-supplied output path under /proc, /sys or /dev hung the server permanently. The
+ * ancestors are walked here under a hard bound and each level is created non-recursively,
+ * so a repeated ENOENT terminates on the first one. Verified on Linux: /proc throws ENOENT
+ * and /sys throws EROFS, both in 0 ms, while a normal nested path still succeeds.
+ */
+function ensureDirBounded(dir) {
+    if (existsSync(dir))
+        return;
+    const missing = [];
+    let cur = dir;
+    for (let i = 0; i < 64 && !existsSync(cur); i++) {
+        missing.push(cur);
+        const parent = dirname(cur);
+        if (parent === cur)
+            break;
+        cur = parent;
+    }
+    if (!existsSync(cur))
+        throw new Error(`cannot create ${dir}: no existing ancestor directory`);
+    for (const d of missing.reverse())
+        mkdirSync(d);
+}
 function outputPath(out, fallbackName, ext, overwrite = false) {
     const p = expandPath(out ?? join(dataDir(), "documents", fallbackName));
     const withExt = p.toLowerCase().endsWith(ext) ? p : `${p}${ext}`;
-    mkdirSync(dirname(withExt), { recursive: true });
+    ensureDirBounded(dirname(withExt));
     // A path this server derived itself (no out_path given) must never land on an earlier
     // document: two proposals with the same title get -2, -3, ... instead of one file.
     if (out === undefined && !overwrite) {
@@ -339,7 +367,7 @@ server.registerTool("doc_create", {
 });
 server.registerTool("doc_from_markdown", {
     title: "Markdown to Word",
-    description: "Call this tool to turn markdown into a .docx and return the path with a count of blocks by type. Headings, lists, GFM tables and code fences are honoured. An existing file is kept unless overwrite.",
+    description: "Call this tool to turn markdown into a .docx, returning the file and a count of blocks by type. Headings, lists, GFM tables and code fences are honoured. Empty markdown is refused, and so is overwriting without the flag.",
     inputSchema: {
         markdown: z.string().describe("The markdown source. ATX headings, paragraphs, bullet and numbered lists, GFM pipe tables and fenced code blocks as monospace are honoured, as are **bold**, *italic* and `code` inline"),
         out_path: z.string().optional().describe("Where to write the .docx. Defaults to the data directory"),

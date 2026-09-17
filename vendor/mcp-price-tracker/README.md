@@ -4,6 +4,8 @@ Ask your assistant what something costs right now. Point it at any product page 
 
 Built by [theluckystrike](https://github.com/theluckystrike).
 
+**In the [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.theluckystrike%2Fprice-tracker-drop-alert-watch/versions/latest)** (`io.github.theluckystrike/price-tracker-drop-alert-watch`).
+
 ![price-tracker demo](../../assets/demo-price-tracker.gif)
 
 **Watch any product page for price drops from chat -- no scraping service, no account, all local.**
@@ -202,7 +204,7 @@ All data stays local, in `${XDG_DATA_HOME:-~/.local/share}/mcp-servers/price-tra
 - [mcp-invoice](../invoice/README.md) -- bill a client for something you bought after tracking its price.
 - [mcp-spreadsheet](../spreadsheet/README.md) -- export `price_history` and analyze it as a sheet.
 - [mcp-time-tracker](../time-tracker/README.md) -- track the hours you spend shopping around, if that is somehow billable.
-- [office-suite](../office-suite/README.md) -- all four servers behind one install, one config entry.
+- [office-suite](../office-suite/README.md) -- every sibling server behind one install, one config entry.
 - Guide: [Watch a product price with Claude and get told when it drops](https://mcp.zovo.one/guides/price-drop-alerts-with-claude)
 
 ## FAQ

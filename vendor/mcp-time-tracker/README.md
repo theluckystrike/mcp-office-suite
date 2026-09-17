@@ -7,6 +7,8 @@ or a set of invoice line items. Everything is stored as plain JSON on your own m
 
 Built by [theluckystrike](https://github.com/theluckystrike).
 
+**In the [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.theluckystrike%2Ftime-tracker-timesheet-billable-hours/versions/latest)** (`io.github.theluckystrike/time-tracker-timesheet-billable-hours`).
+
 ![time-tracker demo](../../assets/demo-time-tracker.gif)
 
 **Track billable time from chat and turn it straight into a report or invoice line items -- zero setup, all local.**
@@ -251,7 +253,7 @@ internet connection.
 - [mcp-invoice](../invoice/README.md) -- turn `invoice_summary` output straight into a numbered PDF invoice.
 - [mcp-spreadsheet](../spreadsheet/README.md) -- export a CSV with `export_csv` and query or reshape it.
 - [mcp-price-tracker](../price-tracker/README.md) -- if you also buy things for the client, watch those prices.
-- [office-suite](../office-suite/README.md) -- all four servers behind one install, one config entry.
+- [office-suite](../office-suite/README.md) -- every sibling server behind one install, one config entry.
 - Guide: [Track billable hours in Claude Code and Cursor](https://mcp.zovo.one/guides/track-time-in-claude-code)
 
 ## FAQ
