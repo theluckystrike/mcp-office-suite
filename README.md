@@ -2,7 +2,7 @@
 
 <!-- mirror-seo:start -->
 
-**MCP server for small business accounting and paperwork: invoices, PDFs, spreadsheets, Word documents, time tracking and expenses.** One install that exposes every tool of all 41 servers, 380 of them.
+**MCP server for small business accounting and paperwork: invoices, PDFs, spreadsheets, Word documents, time tracking and expenses.** One install that exposes every tool of all 45 hosted servers, 418 of them.
 
 Works with Claude Desktop, Claude Code, Cursor and any Model Context Protocol client. Runs on your own machine: this one has no hosted endpoint, so install it from the bundle or from source.
 
