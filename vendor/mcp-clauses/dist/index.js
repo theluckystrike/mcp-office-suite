@@ -186,7 +186,7 @@ function letterheadNote() {
 }
 const server = new McpServer({ name: "mcp-clauses", version: VERSION });
 /* -------------------------------------------------------------------- CRUD */
-server.registerTool("clause_add", {
+server.registerTool("clause_add", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Add a clause",
     description: "Save a reusable contract or proposal clause to the library. Returns the stored clause id, title, category, tags and the variables detected in its body, plus how many clauses of your own the library now holds.",
     inputSchema: {
@@ -240,7 +240,7 @@ server.registerTool("clause_add", {
         return fail(e.message);
     }
 });
-server.registerTool("clause_get", {
+server.registerTool("clause_get", { annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     title: "Read one clause",
     description: "Return one clause in full by id or title: body, category, tags, jurisdiction, variables and the revision count, which stays 0 on free. A partial title matching several is refused with the candidates.",
     inputSchema: {
@@ -258,7 +258,7 @@ server.registerTool("clause_get", {
         return fail(e.message);
     }
 });
-server.registerTool("clause_update", {
+server.registerTool("clause_update", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Update a clause",
     description: "Change the text, category, tags, variables or jurisdiction of a clause. In Pro the previous text is kept as a version; in the free tier the change is applied without history.",
     inputSchema: {
@@ -309,7 +309,7 @@ server.registerTool("clause_update", {
         return fail(e.message);
     }
 });
-server.registerTool("clause_delete", {
+server.registerTool("clause_delete", { annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     title: "Delete a clause",
     description: "Delete one clause by id or exact title and report how many are left. There is no undo, and a deleted starter clause is not re-seeded. Use clause_update to change one you want to keep.",
     inputSchema: { id: z.string().describe("Clause id or exact title") },
@@ -329,7 +329,7 @@ server.registerTool("clause_delete", {
         return fail(e.message);
     }
 });
-server.registerTool("clause_list", {
+server.registerTool("clause_list", { annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     title: "List clauses",
     description: "List the library as id, title, category, tags and variables, in contract order by category then title, which is the order contract_assemble uses. Narrow with category; use clause_search for words.",
     inputSchema: { category: z.string().optional() },
@@ -344,7 +344,7 @@ server.registerTool("clause_list", {
         return fail(e.message);
     }
 });
-server.registerTool("clause_search", {
+server.registerTool("clause_search", { annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     title: "Search clauses",
     description: "Ranked search over clause titles, tags, categories and bodies. Title and tag matches outrank body matches. Jurisdiction filtering is free; the tag filter is Pro and is skipped rather than refusing the search.",
     inputSchema: {
@@ -380,7 +380,7 @@ server.registerTool("clause_search", {
     }
 });
 /* ------------------------------------------------------------ import/export */
-server.registerTool("clause_import", {
+server.registerTool("clause_import", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Import clauses",
     description: "Call this tool to load clauses from a .md or .json file, reporting added, replaced, skipped and capped counts. A duplicate title is skipped unless overwrite. json is Pro. Free: 10 of your own.",
     inputSchema: {
@@ -449,7 +449,7 @@ server.registerTool("clause_import", {
         return fail(e.message);
     }
 });
-server.registerTool("clause_export", {
+server.registerTool("clause_export", { annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     title: "Export clauses",
     description: "Call this tool to write the whole library to one file and return the path, format and count. It is written in contract order, so it re-imports the same way. markdown is free; json is Pro.",
     inputSchema: {
@@ -518,7 +518,7 @@ function assembleNote(pro, unfilled, missing = []) {
         parts.push(`The free tier assembles up to ${FREE_ASSEMBLE_CLAUSES} clauses per document.`);
     return parts.join(" ");
 }
-server.registerTool("contract_assemble", {
+server.registerTool("contract_assemble", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Assemble a contract",
     description: "Call this tool to build a contract from library clauses as .docx or markdown. A variable you omit stays as a bracketed prompt, never invented. clause_ids order is document order. Free: 8 clauses.",
     inputSchema: {
@@ -584,7 +584,7 @@ server.registerTool("contract_assemble", {
         return fail(e.message);
     }
 });
-server.registerTool("variables_list", {
+server.registerTool("variables_list", { annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     title: "List the variables a selection needs",
     description: "List every {{variable}} the clauses you name use, and which clause uses each, so the facts are gathered before contract_assemble leaves bracketed prompts. Reads only; a title matching several is refused.",
     inputSchema: { clause_ids: z.array(z.string()).min(1).describe("Clause ids or titles") },

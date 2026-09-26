@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.theluckystrike/office-suite",
+  "description": "Whole freelancer office in one MCP server: time tracking, price watching, spreadsheets, invoicing.",
+  "version": "0.22.1",
+  "repository": {
+    "url": "https://github.com/theluckystrike/mcp-servers",
+    "source": "github",
+    "subfolder": "servers/office-suite"
+  },
+  "websiteUrl": "https://mcp.zovo.one/bundle",
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/theluckystrike/mcp-servers/releases/download/v0.22.0/office-suite.mcpb",
+      "version": "0.22.0",
+      "fileSha256": "78110f17089c4e1ab515b09065d63463e288650340f6da743658305860c3d074",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

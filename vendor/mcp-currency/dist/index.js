@@ -62,7 +62,7 @@ function needCurrency(explicit, what) {
     return `no ${what} currency: pass it, or set one once in the shared business profile ` +
         `(the invoice server's business_set, field default_currency) and every server in this suite uses it.`;
 }
-server.registerTool("rates_latest", {
+server.registerTool("rates_latest", { annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     title: "Latest ECB reference rates",
     description: "Call this tool for the latest ECB daily reference rates against any base: 1.0812 for USD means 1 base = 1.0812 USD. Crosses go through the euro. Returns the ECB rate date and the cache age.",
     inputSchema: {
@@ -166,7 +166,7 @@ async function ratesForDate(dateArgIn) {
         note: h.offline_note ? `${full} ${h.offline_note}` : full,
     };
 }
-server.registerTool("convert", {
+server.registerTool("convert", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Convert an amount",
     description: "Call this tool to convert an amount between any two ECB-quoted currencies, today or on a past date. Returns the converted amount, the cross rate to 6 decimals, the rounding applied and the rate date used.",
     inputSchema: {
@@ -210,7 +210,7 @@ server.registerTool("convert", {
     }
 });
 /* ------------------------------------------------------------------- convert_many */
-server.registerTool("convert_many", {
+server.registerTool("convert_many", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Convert one amount into several currencies",
     description: "Convert one amount into many currencies off the SAME ECB rate date, each rounded to its own minor units. For several lines at once (mixed-currency invoice lines), call it once per line: every line then shares one rate date. Unknown targets are listed, never failed.",
     inputSchema: {
@@ -244,7 +244,7 @@ server.registerTool("convert_many", {
     }
 });
 /* ------------------------------------------------------------------ fx_rates_for */
-server.registerTool("fx_rates_for", {
+server.registerTool("fx_rates_for", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "FX rates in the shape expense-tracker wants",
     description: "Call this tool when a rebill or an invoice spans more than one currency, instead of asking the user for rates. Returns the fx_rates object expense_to_invoice takes, plus the rate date to write on the invoice.",
     inputSchema: {
@@ -292,7 +292,7 @@ server.registerTool("fx_rates_for", {
     }
 });
 /* ------------------------------------------------------------------ rate_history */
-server.registerTool("rate_history", {
+server.registerTool("rate_history", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Rate history for a pair",
     description: "Call this tool for the ECB rate of one currency pair across a window. Returns one row per published day plus the min, max, average and the change. A window wider than the free 90 days is shortened, not refused.",
     inputSchema: {
@@ -364,7 +364,7 @@ server.registerTool("rate_history", {
     }
 });
 /* ---------------------------------------------------------------------- rate_on */
-server.registerTool("rate_on", {
+server.registerTool("rate_on", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Rate on a given date",
     description: "Call this tool for the ECB rate of one pair on one date. Returns both directions and the rate date, so a reciprocal is never reported as the published figure. A date beyond the free window is shortened, never refused.",
     inputSchema: {
@@ -416,7 +416,7 @@ server.registerTool("rate_on", {
     }
 });
 /* --------------------------------------------------------------- currencies_list */
-server.registerTool("currencies_list", {
+server.registerTool("currencies_list", { annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     title: "Currencies the ECB quotes",
     description: "Every currency in the ECB daily set with its rate against the euro and its decimal places. This is the whole domain: a code not on this list cannot be converted, quoted or historised here.",
     inputSchema: {},
@@ -441,7 +441,7 @@ function fileInfo(p) {
     const st = statSync(p);
     return { path: p, exists: true, bytes: st.size, modified: new Date(st.mtimeMs).toISOString() };
 }
-server.registerTool("cache_status", {
+server.registerTool("cache_status", { annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     title: "Rate cache status",
     description: "Report the ECB rate cache here: which dates are held, how old they are and when they refresh. Reads only. Check it before trusting a rate after time offline; a cache that no longer parses is quarantined and named.",
     inputSchema: {},

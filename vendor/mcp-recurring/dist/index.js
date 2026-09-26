@@ -200,7 +200,7 @@ function summarize(s, asOf) {
 }
 /* ------------------------------------------------------------------- server */
 const server = new McpServer({ name: "mcp-recurring", version: VERSION }, { capabilities: { tools: {}, resources: {}, prompts: {} } });
-server.registerTool("schedule_create", {
+server.registerTool("schedule_create", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Create a recurring invoice schedule",
     description: "Define a repeating invoice: a client, the line items, how often to bill, and when it starts and ends. Returns the schedule id, a summary and its next dates. Nothing is invoiced until invoice_generate_due runs.",
     inputSchema: {
@@ -275,7 +275,7 @@ server.registerTool("schedule_create", {
         return fail(String(e.message ?? e));
     }
 });
-server.registerTool("schedule_list", {
+server.registerTool("schedule_list", { annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     title: "List schedules",
     description: "List schedules: id, client, cadence, per-period amount and currency, start and end dates, status, next due date and auto_generate. Filter by status; a paused schedule reports no next due date.",
     inputSchema: { status: z.enum(["active", "paused"]).optional() },
@@ -293,7 +293,7 @@ server.registerTool("schedule_list", {
         return fail(String(e.message ?? e));
     }
 });
-server.registerTool("schedule_get", {
+server.registerTool("schedule_get", { annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     title: "Get one schedule",
     description: "Return one schedule in full by id or client: items, cadence, dates, due days, anchor rules, notes, per-period amount, next due date and how many invoices it generated. schedule_history is the log.",
     inputSchema: { id: z.string().describe("Schedule id, or a client name") },
@@ -309,7 +309,7 @@ server.registerTool("schedule_get", {
         return fail(String(e.message ?? e));
     }
 });
-server.registerTool("schedule_update", {
+server.registerTool("schedule_update", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Update a schedule",
     description: "Change one schedule by id: client, items, currency, cadence, dates, due_days, notes or auto_generate. Only the fields you pass change. Periods already invoiced are never re-issued, so a new amount applies to future ones.",
     inputSchema: {
@@ -401,7 +401,7 @@ function setStatus(id, status) {
             (status === "paused" ? " Paused schedules are skipped by invoice_generate_due and by forecast." : ""));
     });
 }
-server.registerTool("schedule_pause", {
+server.registerTool("schedule_pause", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Pause a schedule",
     description: "Stop one schedule generating invoices without deleting it; invoice_generate_due and forecast skip it. Its periods keep falling due and resuming back-bills them, so use schedule_skip to drop just one.",
     inputSchema: { id: z.string() },
@@ -413,7 +413,7 @@ server.registerTool("schedule_pause", {
         return fail(String(e.message ?? e));
     }
 });
-server.registerTool("schedule_resume", {
+server.registerTool("schedule_resume", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Resume a schedule",
     description: "Make a paused schedule active again. Every period missed while it was paused is still due and the next invoice_generate_due creates them all. Refused when it would pass the free tier's 3 active.",
     inputSchema: { id: z.string() },
@@ -425,7 +425,7 @@ server.registerTool("schedule_resume", {
         return fail(String(e.message ?? e));
     }
 });
-server.registerTool("schedule_delete", {
+server.registerTool("schedule_delete", { annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     title: "Delete a schedule",
     description: "Delete one schedule permanently. Invoices already generated stay in the invoice server and the history is kept. Re-creating it gives a NEW id, so its old periods count as unbilled. schedule_pause is reversible.",
     inputSchema: { id: z.string().describe("Schedule id, or a client name. Deletion is permanent; re-creating the same schedule afterwards gives it a NEW id, so its old periods count as unbilled again") },
@@ -445,7 +445,7 @@ server.registerTool("schedule_delete", {
         return fail(String(e.message ?? e));
     }
 });
-server.registerTool("schedule_skip", {
+server.registerTool("schedule_skip", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Skip one period",
     description: "Close ONE occurrence for good without pausing the schedule, reporting what will not be billed. period must be a real occurrence of it. An invoiced period is refused; undo reopens a skip.",
     inputSchema: {
@@ -499,7 +499,7 @@ server.registerTool("schedule_skip", {
         return fail(String(e.message ?? e));
     }
 });
-server.registerTool("schedule_upcoming", {
+server.registerTool("schedule_upcoming", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "What falls due soon",
     description: "Table every occurrence of every ACTIVE schedule due in the next N days (30 default), with its amount and the invoice due date, plus a total per currency. Free lists the first 3 in your horizon.",
     inputSchema: { days: z.number().int().min(1).max(3650).optional().describe("Days ahead, default 30. The free tier honours the horizon you ask for and lists the first 3 occurrences in it; Pro lists them all") },
@@ -586,7 +586,7 @@ server.registerTool("schedule_upcoming", {
         return fail(String(e.message ?? e));
     }
 });
-server.registerTool("invoice_generate_due", {
+server.registerTool("invoice_generate_due", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Generate the invoices that are due",
     description: "Create a real invoice in the invoice server for every schedule occurrence on or before as_of that has not been invoiced yet, and render each PDF. Returns what was created, what was skipped and what is still due.",
     inputSchema: {
@@ -707,7 +707,7 @@ server.registerTool("invoice_generate_due", {
         return fail(String(e.message ?? e));
     }
 });
-server.registerTool("schedule_history", {
+server.registerTool("schedule_history", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Schedule history",
     description: "The audit log for one schedule id, oldest first: period, invoice number, issue and due dates, amount, PDF path, and whether that invoice is unpaid, paid, skipped or since deleted. schedule_list finds the id. Pro.",
     inputSchema: { id: z.string() },
@@ -737,7 +737,7 @@ server.registerTool("schedule_history", {
         return fail(String(e.message ?? e));
     }
 });
-server.registerTool("forecast", {
+server.registerTool("forecast", { annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     title: "Revenue forecast",
     description: "Expected invoiced revenue per calendar month per currency from active schedules. Invoiced and skipped periods are excluded and paused schedules listed apart. Free: 3 months; Pro: up to 120.",
     inputSchema: { months: z.number().int().min(1).max(120).optional().describe("Months ahead including this one, default 12") },

@@ -17,7 +17,7 @@ subfolder, so it carries the monorepo's name. This mirror gives it its own.
 
 `@theluckystrike/mcp-license` is not published on npm. To keep this mirror buildable on
 its own, the built package is vendored into `vendor/mcp-license/` and `package.json`
-depends on it through a `file:` path. The ten servers this bundle proxies, and any @theluckystrike package they depend on, are vendored the same way under vendor/mcp-*. So a fresh clone works with no extra setup:
+depends on it through a `file:` path. So a fresh clone works with no extra setup:
 
 ```sh
 git clone https://github.com/theluckystrike/mcp-office-suite.git
