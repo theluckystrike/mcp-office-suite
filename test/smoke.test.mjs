@@ -1,8 +1,8 @@
-import "../../../test/_tmp-scope.mjs"; // run-scoped TMPDIR, removed on exit
+import { closeFixture } from "./_cleanup.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,10 +68,7 @@ function client(env) {
       notify("notifications/initialized");
       return r.result;
     },
-    close() {
-      child.kill();
-      try { rmSync(sandbox, { recursive: true, force: true }); } catch {}
-    },
+    close() { return closeFixture(child, sandbox); },
   };
 }
 
@@ -94,7 +91,8 @@ test("bundle proxies tools/list, forwards calls, and aggregates license_status",
     assert.match(start.text, /Started timer for "acme"/);
 
     // invoice_create through the proxy
-    await c.call("business_set", { name: "Test Co", default_currency: "EUR" });
+    const business = await c.call("invoice_business_set", { name: "Test Co", default_currency: "EUR" });
+    assert.equal(business.isError, false, business.text);
     const inv = await c.call("invoice_create", {
       client: "Acme Corp",
       items: [{ description: "Consulting", quantity: 2, unit_price: 90 }],
@@ -121,6 +119,6 @@ test("bundle proxies tools/list, forwards calls, and aggregates license_status",
     const prm = await c.send("prompts/list", {});
     assert.ok(Array.isArray(prm.result.prompts));
   } finally {
-    c.close();
+    await c.close();
   }
 });

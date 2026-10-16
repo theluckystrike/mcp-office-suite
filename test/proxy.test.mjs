@@ -5,11 +5,11 @@
 // drops the real built suite into it and points it at stub children. The stubs are plain
 // stdio JSON-RPC servers: no SDK, so their behaviour (a flood of stderr, a rejected
 // license key) is exactly what the test needs to provoke.
-import "../../../test/_tmp-scope.mjs"; // run-scoped TMPDIR, removed on exit
+import { closeFixture } from "./_cleanup.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -136,7 +136,7 @@ function suite({ loudChild = "time-tracker", rejectLicenseChild = null } = {}) {
       assert.ok(r.result, `tools/call ${name}: ${JSON.stringify(r.error)}`);
       return { text: r.result.content.map((c) => c.text).join("\n"), isError: r.result.isError === true };
     },
-    close() { try { child.kill(); } catch {} rmSync(root, { recursive: true, force: true }); },
+    close() { return closeFixture(child, root); },
   };
 }
 

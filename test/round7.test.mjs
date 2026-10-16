@@ -2,11 +2,11 @@
 // (business_set -> invoice_business_set / docx_business_set) the child's own prose still
 // named the tool that no longer exists. The proxy now rewrites the child's text and
 // publishes a tools_map resource.
-import "../../../test/_tmp-scope.mjs"; // run-scoped TMPDIR, removed on exit
+import { closeFixture } from "./_cleanup.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -122,7 +122,7 @@ function suite() {
       assert.ok(r.result, `tools/call ${name}: ${JSON.stringify(r.error)}`);
       return { text: r.result.content.map((c) => c.text).join("\n"), isError: r.result.isError === true };
     },
-    close() { try { child.kill(); } catch {} rmSync(root, { recursive: true, force: true }); },
+    close() { return closeFixture(child, root); },
   };
 }
 
