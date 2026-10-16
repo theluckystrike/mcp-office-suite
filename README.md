@@ -6,6 +6,8 @@
 
 Works with Claude Desktop, Claude Code, Cursor and any Model Context Protocol client. Runs on your own machine: this one has no hosted endpoint, so install it from the bundle or from source.
 
+Product page: <https://mcp.zovo.one/s/office-suite> — capabilities, free limits and supported installation paths.
+
 ## Install
 
 **Claude Desktop, one click.** Download `office-suite.mcpb` from the [bundle catalog](https://mcp.zovo.one/downloads#office-suite) and double-click it.
