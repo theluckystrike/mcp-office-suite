@@ -16,8 +16,8 @@ const gate = createLicenseGate({ product: PRODUCT });
 const ok = (text) => ({ content: [{ type: "text", text }] });
 const fail = (text) => ({ content: [{ type: "text", text: `Error: ${text}` }], isError: true });
 const json = (v) => ok(JSON.stringify(v, null, 2));
-/** A limit hit is information, not a transport error: isError stays false. */
-const gated = (text) => ok(text);
+/** A refused operation is an MCP error with its upgrade path preserved. */
+const gated = (text) => fail(text);
 const code = (name) => z.string().regex(/^[A-Za-z]{3}$/, `${name} must be a 3-letter ISO code such as EUR`);
 const norm = (s) => s.trim().toUpperCase();
 /**

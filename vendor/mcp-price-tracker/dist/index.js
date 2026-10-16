@@ -214,7 +214,7 @@ registerTool("watch_add", { annotations: { readOnlyHint: false, destructiveHint:
     if (existing)
         return text(`Already watching that URL as ${existing.id}${existing.label ? ` (${existing.label})` : ""}. Use watch_refresh to update it.`);
     if (!gate.isPro() && db.watches.length >= FREE_WATCH_LIMIT) {
-        return text(`The free tier tracks ${FREE_WATCH_LIMIT} items at a time and you already have ${db.watches.length}. ` +
+        return fail(`The free tier tracks ${FREE_WATCH_LIMIT} items at a time and you already have ${db.watches.length}. ` +
             `Remove one with watch_remove, or unlock unlimited watches.\n\n${gate.upgradeText("unlimited watches", "watch_add")}`);
     }
     let target = null;
@@ -239,7 +239,7 @@ registerTool("watch_add", { annotations: { readOnlyHint: false, destructiveHint:
             if (raced)
                 return text(`Already watching that URL as ${raced.id}${raced.label ? ` (${raced.label})` : ""}. Use watch_refresh to update it.`);
             if (!gate.isPro() && fresh.watches.length >= FREE_WATCH_LIMIT) {
-                return text(`The free tier tracks ${FREE_WATCH_LIMIT} items at a time and you already have ${fresh.watches.length}. ` +
+                return fail(`The free tier tracks ${FREE_WATCH_LIMIT} items at a time and you already have ${fresh.watches.length}. ` +
                     `Remove one with watch_remove, or unlock unlimited watches.\n\n${gate.upgradeText("unlimited watches", "watch_add")}`);
             }
             db.watches = fresh.watches;
@@ -323,7 +323,7 @@ registerTool("watch_refresh", { annotations: { readOnlyHint: false, destructiveH
             if (db.watches.length === 1)
                 targets = db.watches;
             else
-                return text(`Refreshing every watch in one call is a Pro feature. On free, pass an id: ${db.watches.map((w) => w.id).join(", ")}.\n\n${gate.upgradeText("watch_refresh all", "watch_refresh")}`);
+                return fail(`Refreshing every watch in one call is a Pro feature. On free, pass an id: ${db.watches.map((w) => w.id).join(", ")}.\n\n${gate.upgradeText("watch_refresh all", "watch_refresh")}`);
         }
         else
             targets = db.watches;
@@ -423,7 +423,7 @@ registerTool("price_add_manual", { annotations: { readOnlyHint: false, destructi
         let w = findWatch(db, url);
         if (!w) {
             if (!gate.isPro() && db.watches.length >= FREE_WATCH_LIMIT) {
-                return text(`The free tier tracks ${FREE_WATCH_LIMIT} items at a time and you already have ${db.watches.length}.\n\n${gate.upgradeText("unlimited watches", "price_add_manual")}`);
+                return fail(`The free tier tracks ${FREE_WATCH_LIMIT} items at a time and you already have ${db.watches.length}.\n\n${gate.upgradeText("unlimited watches", "price_add_manual")}`);
             }
             w = {
                 id: newId(), url: canonicalUrl(url), label: label?.trim() || null,

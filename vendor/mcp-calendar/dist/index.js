@@ -37,8 +37,8 @@ const LOCK = lockPath();
 /* -------------------------------------------------------------- primitives */
 const ok = (t) => ({ content: [{ type: "text", text: t }] });
 const err = (t) => ({ content: [{ type: "text", text: `Error: ${t}` }], isError: true });
-/** A gated feature is not an error: the user must see the upgrade path. */
-const gated = (feature, toolName) => ok(gate.upgradeText(feature, toolName));
+/** A refused operation is an MCP error with its upgrade path preserved. */
+const gated = (feature, toolName) => err(gate.upgradeText(feature, toolName));
 function guard(fn) {
     return async (a) => {
         try {
@@ -324,7 +324,7 @@ server.registerTool("ics_import", { annotations: { readOnlyHint: false, destruct
         // "Pro feature" and stops: url only adds fetching the feed, and text stores the same
         // events for nothing (D-R58).
         if (!gate.isPro())
-            return ok(gate.upgradeText("importing a calendar from a URL", "ics_import") +
+            return err(gate.upgradeText("importing a calendar from a URL", "ics_import") +
                 `\n\nFree alternative, same result: open the feed in a browser or download the .ics, then paste the ` +
                 `file contents - ics_import {name: "${name}", text: "<the .ics contents>"}. url only adds fetching the ` +
                 `feed for you; the events, the parser and the free-tier calendar allowance are identical.`);

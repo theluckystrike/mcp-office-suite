@@ -78,6 +78,7 @@ const CHILDREN: ChildDef[] = [
   { id: "onboarding", pkg: "@theluckystrike/mcp-onboarding", optional: true },
   { id: "backlink-checker", pkg: "@theluckystrike/mcp-backlink-checker", optional: true },
   { id: "three-way-match", pkg: "@theluckystrike/mcp-three-way-match", optional: true },
+  { id: "duplicate-invoice-check", pkg: "@theluckystrike/mcp-duplicate-invoice-check", optional: true },
   { id: "hourly-rate", pkg: "@theluckystrike/mcp-hourly-rate", optional: true },
 ];
 
@@ -240,35 +241,38 @@ async function loadChildCapabilities(child: Child): Promise<void> {
 
 /* ------------------------------------------------- renamed-tool text rewrite */
 
-/**
- * D-R29: when two children register the same tool name the bundle exposes prefixed names
- * (business_set -> invoice_business_set / docx_business_set), but the child's own prose
- * still says "Run business_set ...", naming a tool that does not exist on the bundle.
- * Rewrite whole-word occurrences of the child's tool names in the text it returns, per
- * child, so every name a user reads is a name they can call.
- */
+/** Preserve child payloads; expose collision names separately from caller evidence. */
 function renameMapFor(child: Child): Map<string, string> {
   const m = new Map<string, string>();
   for (const t of child.tools) if (t.name !== t.childName) m.set(t.childName, t.name);
   return m;
 }
 
-function rewriteToolNames(text: string, renames: Map<string, string>): string {
-  if (!renames.size) return text;
-  let out = text;
-  for (const [from, to] of renames) {
-    // Whole word only: business_set must not match invoice_business_set, and a name
-    // already rewritten in an earlier pass must not be rewritten again.
-    out = out.replace(new RegExp(`(?<![A-Za-z0-9_])${from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9_])`, "g"), to);
-  }
-  return out;
-}
-
-function rewriteContent(content: unknown, renames: Map<string, string>): unknown {
+function rewriteContent(content: unknown, renames: Map<string, string>, childId: string): unknown {
   if (!renames.size || !Array.isArray(content)) return content;
-  return content.map((c: any) =>
-    c && c.type === "text" && typeof c.text === "string" ? { ...c, text: rewriteToolNames(c.text, renames) } : c,
-  );
+  return content.map((c: any) => {
+    if (!c || c.type !== "text" || typeof c.text !== "string") return c;
+    let structured: any;
+    try { structured = JSON.parse(c.text); } catch {
+      return c;
+    }
+    // JSON is source evidence, not prose. Never rewrite customer references, IDs,
+    // labels, CSV cells, match keys or report-page rows just because they name a tool.
+    // These two report schemas expose explicit navigation hints at this exact path.
+    if ((childId === "three-way-match" || childId === "duplicate-invoice-check") &&
+        structured && typeof structured === "object" && !Array.isArray(structured)) {
+      const hints = structured.report?.retrieval;
+      let changed = false;
+      if (hints && typeof hints === "object" && !Array.isArray(hints)) {
+        for (const key of ["tool", "page_tool", "export_tool"]) {
+          const exposed = typeof hints[key] === "string" ? renames.get(hints[key]) : undefined;
+          if (exposed) { hints[key] = exposed; changed = true; }
+        }
+      }
+      if (changed) return { ...c, text: JSON.stringify(structured) };
+    }
+    return c;
+  });
 }
 
 /* -------------------------------------------------------- aggregate license */
@@ -346,7 +350,17 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   if (!child) return { content: [{ type: "text", text: `Error: owning server for "${name}" is not connected` }], isError: true };
   try {
     const r = await child.client.callTool({ name: tool.childName, arguments: (args ?? {}) as Record<string, unknown> });
-    return { content: rewriteContent(r.content, renameMapFor(child)), isError: r.isError === true };
+    const renames = renameMapFor(child);
+    return {
+      ...r,
+      content: rewriteContent(r.content, renames, child.def.id),
+      isError: r.isError === true,
+      _meta: {
+        ...(r._meta ?? {}),
+        "office-suite/tool-names": Object.fromEntries(renames),
+        "office-suite/tools-map-uri": "office://tools_map",
+      },
+    };
   } catch (e) {
     return { content: [{ type: "text", text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true };
   }

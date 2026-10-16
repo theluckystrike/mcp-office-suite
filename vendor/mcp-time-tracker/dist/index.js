@@ -259,8 +259,8 @@ function csvCell(v) {
 }
 const ok = (text) => ({ content: [{ type: "text", text }] });
 const err = (text) => ({ content: [{ type: "text", text: `Error: ${text}` }], isError: true });
-/** Gated feature: not an error, the user must see the upgrade path. */
-const gated = (feature, toolName) => ok(gate.upgradeText(feature, toolName));
+/** A refused operation is an MCP error; keep its actionable upgrade path visible. */
+const gated = (feature, toolName) => err(gate.upgradeText(feature, toolName));
 function guard(fn) {
     return async (a) => {
         try {
@@ -484,7 +484,7 @@ server.registerTool("entry_add", { annotations: { readOnlyHint: false, destructi
             throw new Error("end must be after start");
         const db = load();
         if (!gate.isPro() && db.entries.length >= 100)
-            return ok(gate.upgradeText("more than 100 stored entries (free tier)", "entry_add"));
+            return err(gate.upgradeText("more than 100 stored entries (free tier)", "entry_add"));
         const r = resolveProject(db, a.project);
         if (r.kind === "ambiguous")
             return ok(ambiguousText(a.project, r.candidates));
@@ -553,7 +553,7 @@ server.registerTool("entry_log", { annotations: { readOnlyHint: false, destructi
     return withFileLock(LOCK, async () => {
         const db = load();
         if (!gate.isPro() && db.entries.length >= 100)
-            return ok(gate.upgradeText("more than 100 stored entries (free tier)", "entry_log"));
+            return err(gate.upgradeText("more than 100 stored entries (free tier)", "entry_log"));
         const r = resolveProject(db, a.client);
         if (r.kind === "ambiguous")
             return ok(ambiguousText(a.client, r.candidates));

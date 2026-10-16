@@ -478,7 +478,7 @@ server.registerTool("doc_fill_template", { annotations: { readOnlyHint: false, d
                 : `${basename(tpl)} contains no {{placeholders}}. Add them to the template in Word first.`);
         }
         if (!gate.isPro() && found.length > FREE_TEMPLATE_PLACEHOLDERS) {
-            return ok(`This template has ${found.length} placeholders. The free tier fills templates with up to ` +
+            return fail(`This template has ${found.length} placeholders. The free tier fills templates with up to ` +
                 `${FREE_TEMPLATE_PLACEHOLDERS}.\n\n${gate.upgradeText("templates of any size", "doc_fill_template")}`);
         }
         const values = {};
@@ -579,7 +579,7 @@ server.registerTool("proposal_create", { annotations: { readOnlyHint: false, des
         // refused call consumes no reference and none of the free tier's monthly documents.
         const gated = agreementLimit();
         if (gated)
-            return ok(gated);
+            return fail(gated);
         if (businessMissing())
             return fail(NO_BUSINESS_NOTE + " Nothing was written and no reference was used.");
         const { blocks, total, terms, omitted } = proposalBody(a);
@@ -687,7 +687,7 @@ server.registerTool("contract_create", { annotations: { readOnlyHint: false, des
     try {
         const gated = agreementLimit();
         if (gated)
-            return ok(gated);
+            return fail(gated);
         const biz = issuer();
         const currency = (a.fee.currency ?? biz.default_currency).toUpperCase();
         const fee = money(a.fee.amount, currency);

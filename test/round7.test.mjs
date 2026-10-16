@@ -1,7 +1,7 @@
 // Round-7 fix (docs/USER_VALUE_R7.md): D-R29 - when the bundle renames a colliding tool
 // (business_set -> invoice_business_set / docx_business_set) the child's own prose still
-// named the tool that no longer exists. The proxy now rewrites the child's text and
-// publishes a tools_map resource.
+// named the tool that no longer exists. R37 preserves opaque caller evidence and
+// publishes collision mappings as result metadata plus the tools_map resource.
 import { closeFixture } from "./_cleanup.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -57,7 +57,12 @@ function handle(msg) {
       if (name === "license_status") return reply(text(JSON.stringify({ product: ID, pro: false })));
       if (name === "license_activate") return reply(text("Pro activated on " + ID));
       if (name === "business_set") return reply(text("Saved on " + ID + "."));
-      // The defect text: a child telling the user to call a tool by its own name.
+      const opaque = msg.params.arguments?.opaque;
+      if (opaque) {
+        const payload = opaque === "csv" ? 'invoice_number,total\\n"business_set",100\\n' : opaque === "html" ? '<td data-ref="business_set">business_set</td>' : 'Source invoice reference: business_set. Run business_set.';
+        return reply({ ...text(payload), structuredContent: { invoice_number: "business_set" }, _meta: { origin: "child" } });
+      }
+      // A child instruction may be interleaved with caller data; keep the payload.
       return reply(text("No business details yet. Run business_set {name, address, email, vat_id} and create it again. (business_set_extra and my_business_set are other words.)"));
     }
     default:
@@ -120,13 +125,13 @@ function suite() {
     async call(name, args, timeoutMs) {
       const r = await send("tools/call", { name, arguments: args ?? {} }, timeoutMs);
       assert.ok(r.result, `tools/call ${name}: ${JSON.stringify(r.error)}`);
-      return { text: r.result.content.map((c) => c.text).join("\n"), isError: r.result.isError === true };
+      return { text: r.result.content.map((c) => c.text).join("\n"), isError: r.result.isError === true, meta: r.result._meta, structuredContent: r.result.structuredContent };
     },
     close() { return closeFixture(child, root); },
   };
 }
 
-test("D-R29: a renamed tool is renamed in the child's text too, per child", async (t) => {
+test("D-R29/R37: child payload stays intact and collision names are separately mapped", async (t) => {
   const s = suite();
   t.after(() => s.close());
   await s.init();
@@ -137,13 +142,14 @@ test("D-R29: a renamed tool is renamed in the child's text too, per child", asyn
   assert.ok(names.includes("docx_business_set"), names.join(","));
   assert.equal(names.includes("business_set"), false);
 
-  // invoice's own prose must name invoice_business_set ...
+  // The original prose is evidence; mappings carry the callable names separately.
   const inv = await s.call("invoice_probe", {});
-  assert.match(inv.text, /Run invoice_business_set \{name, address, email, vat_id\}/);
-  assert.equal(/Run business_set/.test(inv.text), false, inv.text);
+  assert.match(inv.text, /Run business_set \{name, address, email, vat_id\}/);
+  assert.equal(inv.meta["office-suite/tool-names"].business_set,"invoice_business_set");
   // ... and docx's the docx one: the rewrite is per child, not global.
   const dx = await s.call("docx_probe", {});
-  assert.match(dx.text, /Run docx_business_set \{name, address, email, vat_id\}/);
+  assert.match(dx.text, /Run business_set \{name, address, email, vat_id\}/);
+  assert.equal(dx.meta["office-suite/tool-names"].business_set,"docx_business_set");
 
   // whole words only: business_set_extra and my_business_set are left alone
   assert.match(inv.text, /business_set_extra and my_business_set are other words/);
@@ -151,6 +157,19 @@ test("D-R29: a renamed tool is renamed in the child's text too, per child", asyn
   // a child that never collided keeps its text untouched
   const st = await s.call("spreadsheet_probe", {});
   assert.match(st.text, /Run business_set \{name, address, email, vat_id\}/);
+
+  for (const [opaque, expected] of [
+    ["csv", 'invoice_number,total\n"business_set",100\n'],
+    ["html", '<td data-ref="business_set">business_set</td>'],
+    ["prose", 'Source invoice reference: business_set. Run business_set.'],
+  ]) {
+    const raw=await s.call("invoice_probe", { opaque });
+    assert.equal(raw.text,expected,`${opaque} source changed`);
+    assert.deepEqual(raw.structuredContent,{invoice_number:"business_set"});
+    assert.equal(raw.meta.origin,"child");
+    assert.equal(raw.meta["office-suite/tool-names"].business_set,"invoice_business_set");
+    assert.equal(raw.meta["office-suite/tools-map-uri"],"office://tools_map");
+  }
 
   // the rename is announced once on startup
   assert.match(s.stderr, /renamed 2 colliding tools: (invoice\.business_set -> invoice_business_set|docx\.business_set -> docx_business_set)/);

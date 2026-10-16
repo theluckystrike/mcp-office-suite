@@ -588,7 +588,7 @@ server.registerTool("invoice_create", { annotations: { readOnlyHint: false, dest
         if (r.error)
             return fail(r.error);
         if (r.gated)
-            return ok(r.gated);
+            return fail(r.gated);
         return ok(`Created invoice ${r.invoice.number}.\n\n` +
             `${JSON.stringify({ ...summarize(r.invoice), lines: lineRows(r.invoice) }, null, 2)}\n\n` +
             `Amounts are integer minor units: each line was rounded first and then summed, so the total always agrees with the printed lines. ` +
@@ -656,7 +656,7 @@ server.registerTool("invoice_from_hours", { annotations: { readOnlyHint: false, 
         if (r.error)
             return fail(r.error);
         if (r.gated)
-            return ok(r.gated);
+            return fail(r.gated);
         const ids = a.entry_ids ?? [];
         // D-S1: the fx direction contract is actionable at call time, so the response
         // states it as well as the fx_rates argument description.

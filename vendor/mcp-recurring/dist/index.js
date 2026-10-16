@@ -232,7 +232,7 @@ server.registerTool("schedule_create", { annotations: { readOnlyHint: false, des
             const today = isoDate();
             const pro = gate.isPro();
             if (!pro && activeCount(list, today) >= FREE_ACTIVE_SCHEDULES) {
-                return ok(`You already have ${FREE_ACTIVE_SCHEDULES} active schedules. The free tier allows ${FREE_ACTIVE_SCHEDULES}; pause one with schedule_pause, or upgrade.\n\n${gate.upgradeText("unlimited schedules", "schedule_create")}`);
+                return fail(`You already have ${FREE_ACTIVE_SCHEDULES} active schedules. The free tier allows ${FREE_ACTIVE_SCHEDULES}; pause one with schedule_pause, or upgrade.\n\n${gate.upgradeText("unlimited schedules", "schedule_create")}`);
             }
             let note = "";
             let anchor = a.anchor_day;
@@ -392,7 +392,7 @@ function setStatus(id, status) {
             return fail(`no schedule ${id}. List them with schedule_list.`);
         if (status === "active" && s.status !== "active" && !gate.isPro()
             && activeCount(list, isoDate()) >= FREE_ACTIVE_SCHEDULES) {
-            return ok(`Resuming would make ${FREE_ACTIVE_SCHEDULES + 1} active schedules; the free tier allows ${FREE_ACTIVE_SCHEDULES}.\n\n${gate.upgradeText("unlimited schedules")}`);
+            return fail(`Resuming would make ${FREE_ACTIVE_SCHEDULES + 1} active schedules; the free tier allows ${FREE_ACTIVE_SCHEDULES}.\n\n${gate.upgradeText("unlimited schedules")}`);
         }
         s.status = status;
         s.updated = new Date().toISOString();
@@ -714,7 +714,7 @@ server.registerTool("schedule_history", { annotations: { readOnlyHint: false, de
 }, async (a) => {
     try {
         if (!gate.isPro()) {
-            return ok(`schedule_history is a Pro feature.\n\n${gate.upgradeText("the schedule audit log", "schedule_history")}`);
+            return fail(`schedule_history is a Pro feature.\n\n${gate.upgradeText("the schedule audit log", "schedule_history")}`);
         }
         const s = findSchedule(getSchedules(), a.id);
         const id = s?.id ?? a.id;
