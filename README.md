@@ -1,14 +1,14 @@
-# mcp-office-suite
+# MCP Office Suite
 
 <!-- mirror-seo:start -->
 
-**MCP server for small business accounting and paperwork: invoices, PDFs, spreadsheets, Word documents, time tracking and expenses.** One install that exposes every tool of all 45 hosted servers, 418 of them.
+**MCP server for small business accounting and paperwork: invoices, PDFs, spreadsheets, Word documents, time tracking and expenses.** One local config entry for invoicing, documents, time tracking and supplier checks.
 
 Works with Claude Desktop, Claude Code, Cursor and any Model Context Protocol client. Runs on your own machine: this one has no hosted endpoint, so install it from the bundle or from source.
 
 ## Install
 
-**Claude Desktop, one click.** Download `office-suite.mcpb` from the [latest release](https://github.com/theluckystrike/mcp-servers/releases/latest) and double-click it.
+**Claude Desktop, one click.** Download `office-suite.mcpb` from the [bundle catalog](https://mcp.zovo.one/downloads#office-suite) and double-click it.
 
 **From source.** The mirror is self-contained: every `@theluckystrike/*` dependency is vendored, so a fresh clone builds with no extra setup.
 
@@ -39,174 +39,71 @@ Read-only mirror of [mcp-servers/servers/office-suite](https://github.com/theluc
 
 <!-- mirror-seo:end -->
 
-[![theluckystrike/mcp-office-suite MCP server](https://glama.ai/mcp/servers/theluckystrike/mcp-office-suite/badges/score.svg)](https://glama.ai/mcp/servers/theluckystrike/mcp-office-suite)
+Run the freelancer office from one MCP config entry. The v0.22.6 bundle initializes 48 local child servers and exposes 441 tools, measured over MCP on 2026-10-16. It includes time tracking, invoices, spreadsheets, quotes, expenses and the supplier-invoice three-way matcher. The proxy forwards tools, resources and prompts to the child that owns them; each child keeps its own storage and free tier.
 
-**In the [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.theluckystrike%2Foffice-suite-time-invoice-expense-excel-price/versions/latest)** (`io.github.theluckystrike/office-suite-time-invoice-expense-excel-price`).
+Built by [theluckystrike](https://github.com/theluckystrike). MIT. Support: support@zovo.one.
 
+## Install
 
-One install for the whole freelancer office. This MCP server proxies all 31 sibling servers in this repository, so a client gets every one of their 292 tools behind a single config entry instead of 31. The child list is published at runtime as the `office://tools_map` resource, which is the only figure to trust: it is read from the running server, not from this file. Under the hood it starts each sibling as its own stdio child process, forwards `tools/call`, `resources/*` and `prompts/*` to whichever child owns the name, and merges their license state into one `license_status` / `license_activate` pair. Nothing is re-implemented: each child server runs exactly as it does standalone, with its own local JSON storage.
+For Claude Desktop, download [office-suite.mcpb v0.22.6](https://github.com/theluckystrike/mcp-servers/releases/download/v0.22.6/office-suite.mcpb) and open it. SHA-256: `5221f20c51572f8da17808a8f03097a76d4d48b72c7d0c2509708297129277bc`.
 
-Every tool of time-tracker, price-tracker, spreadsheet and invoice, one `claude mcp add`.
+The [download catalog](https://mcp.zovo.one/downloads#office-suite) lists explicit archive versions. The latest GitHub release is not a complete collection of all server bundles. This proxy is local stdio only; it has no hosted endpoint. Its npm package and internal dependencies are not published, so use the bundle or build from source.
 
-## 60-second install
-
-npm publish for `@theluckystrike/mcp-office-suite` (and its dependencies) is pending. Until then, the `.mcpb` one-click bundle or a clone+build is the working path, both are verified below. This server is packaged as `office-suite.mcpb` on release v0.2.1 and is listed on the official MCP registry (`io.github.theluckystrike/office-suite-time-invoice-expense-excel-price`).
-
-One-click (.mcpb): download `office-suite.mcpb` from the latest release and double-click it in Claude Desktop:
-https://github.com/theluckystrike/mcp-servers/releases/latest
-
-(`claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "office-suite": {
-      "command": "npx",
-      "args": ["-y", "@theluckystrike/mcp-office-suite"]
-    }
-  }
-}
-```
-
-Claude Code:
+Source installation requires Node.js 22 or newer for the current repository build tooling:
 
 ```sh
-claude mcp add office-suite -- npx -y @theluckystrike/mcp-office-suite
-```
-
-(`.cursor/mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "office-suite": {
-      "command": "npx",
-      "args": ["-y", "@theluckystrike/mcp-office-suite"]
-    }
-  }
-}
-```
-
-The `npx` form above starts working the moment the package is published. Until then, use the .mcpb bundle above, or
-build from source with exactly these commands:
-
-```sh
-git clone https://github.com/theluckystrike/mcp-servers.git && cd mcp-servers
+git clone https://github.com/theluckystrike/mcp-servers.git
+cd mcp-servers
 npm install
 npm run build
 ```
 
-`npm run build` (no `-w`) is required here, it builds `mcp-license` and every sibling server that office-suite spawns as a child, then office-suite itself. Then point your client's `command` at `node` with one arg: the absolute path to `servers/office-suite/dist/index.js`.
+The root build bootstraps the license/timezone engine dependency and builds the child servers. Use your checkout's absolute path in the config. For Claude Desktop, merge this entry into `mcpServers` in its config file:
 
-To run every server in Pro mode set `MCP_LICENSE_KEY` in the same config block, or call `license_activate` once with your key, it is forwarded to every connected child. Activation is all-or-nothing: the reply is an error unless **every** child accepted the key, and it prints a per-child table (`OK` / `FAILED` with each child's own message) so a bundle that is half Pro cannot look like a success.
+```json
+{
+  "mcpServers": {
+    "office-suite": {
+      "command": "node",
+      "args": ["/absolute/path/mcp-servers/servers/office-suite/dist/index.js"]
+    }
+  }
+}
+```
 
-## Why one server instead of thirty-one
+For Cursor, merge the same entry into `.cursor/mcp.json` or your user MCP config. For Claude Code:
 
-Aggregation is what usage rewards in this category: the most-used server we track is a tool-aggregator gateway with 2,530 tools and 419,019 uses, 7.5x the next server and 30x the cohort median. A user who wants "office stuff" should not have to add thirty-one separate MCP servers to one client config. Installing this one gets every tool below.
+```sh
+claude mcp add office-suite -- node /absolute/path/mcp-servers/servers/office-suite/dist/index.js
+```
 
-## Tools
+Restart the client, call `license_status`, and read `office://tools_map` to discover the children and exact exposed tool names. A successful tools list confirms discovery; run a real task to verify the workflow you need.
 
-Tool names are passed through unchanged from each child. If this bundle ever proxies two children that register the same tool name, both are exposed with a `<child>_<tool>` prefix instead, the current renamed pairs are listed under Renamed tools below.
+## Tools and collision names
 
-### time-tracker
+| Entry | Behavior |
+| --- | --- |
+| Child tools | The child's own tools, arguments and free/Pro rules. |
+| `license_status` | Per-child license state and the bundle checkout URL. |
+| `license_activate` | Forwards a key to every connected child and reports every result. |
+| `office://tools_map` resource | Maps exposed tool names to their child and original name. |
 
-| Tool | What it does |
-|---|---|
-| `timer_start` | Start a stopwatch for a project; stops and logs any previous running timer |
-| `timer_stop` | Stop the running timer and log it as a time entry |
-| `timer_status` | Show the running timer and today's total hours |
-| `entry_add` | Log time you already worked, with a start plus end or minutes |
-| `entry_list` | List logged time entries as a table (free: last 7 days) |
-| `entry_delete` | Delete one time entry by id |
-| `entry_edit` | Change fields of an existing entry |
-| `project_set_rate` | Set the hourly rate and currency for a project |
-| `report` | Hours and money by project, day, task or tag (tag grouping is Pro) |
-| `export_csv` | Export the timesheet to a CSV file |
-| `invoice_summary` | Turn tracked billable time into invoice line items |
+When child names collide, the proxy exposes names prefixed with the child, such as `invoice_business_set`. It rewrites tool-name references in child text responses to the exposed names. Read the runtime map rather than guessing a prefix or relying on an older static tool table.
 
-### price-tracker
+The v0.22.6 manifest's 441 names and descriptions match the actual running bundle, including collision prefixes. [Measured inventory](https://github.com/theluckystrike/mcp-servers/blob/main/data/office-suite-tool-inventory.json) and [artifact evidence](https://github.com/theluckystrike/mcp-servers/blob/main/intel/R36-artifact-verification.md) are available. This verifies discovery and matcher delivery through the proxy; it is not a feature test of every child tool.
 
-| Tool | What it does |
-|---|---|
-| `price_check` | Check a product's current price right now |
-| `watch_add` | Start watching a product URL for price drops |
-| `watch_list` | List all watched products and their latest price |
-| `watch_remove` | Stop watching a product |
-| `watch_refresh` | Re-check all watches (or one) immediately |
-| `price_history` | Price history for one watched product |
-| `price_add_manual` | Record a price by hand, for sites that block fetching |
-| `alerts_pending` | Watches that dropped below their target price |
+## Free and Pro
 
-### spreadsheet
+| Free | Pro bundle |
+| --- | --- |
+| Each child's documented free tier; no subscription required | $39 one time, removes the applicable limits across the children |
 
-| Tool | What it does |
-|---|---|
-| `sheet_info` | Overview of a CSV/XLSX file: sheets, columns, row count |
-| `sheet_read` | Read rows from a spreadsheet |
-| `sheet_query` | Filter, group and sort rows |
-| `sheet_stats` | Per-column statistics (min, max, mean, sum, distinct) |
-| `sheet_find` | Find text across a spreadsheet |
-| `sheet_write` | Write rows into a spreadsheet |
-| `sheet_add_column` | Add a computed column |
-| `sheet_convert` | Convert between CSV and XLSX |
+[Get the $39 bundle](https://mcp.zovo.one/buy/bundle), then call `license_activate` with the bundle key or set `MCP_LICENSE_KEY` in the server environment. Keys verify offline. A $19 single-server key upgrades its own product; it does not unlock the whole suite.
 
-### invoice
+Activation returns an error if any connected child rejects the key, with an OK/FAILED result for each child. Accepted activations are not rolled back: use the result table and `license_status`, correct the key or failing child, and retry. Do not interpret a partial activation as all children being Pro.
 
-| Tool | What it does |
-|---|---|
-| `business_set` | Set your business profile: name, address, VAT id, IBAN, default currency and terms |
-| `client_add` | Store a client so invoices can refer to them by name |
-| `client_list` | List every stored client |
-| `invoice_create` | Create an invoice from line items, with tax and discount |
-| `invoice_from_hours` | Create an invoice from hours worked at a rate |
-| `invoice_list` | List invoices |
-| `invoice_get` | Get one invoice by id or number |
-| `invoice_mark_paid` | Record a payment against an invoice |
-| `invoice_pdf` | Render an invoice as a PDF file |
-| `overdue_report` | Invoices past their due date, by how many days (Pro) |
+## Local execution and privacy
 
-### Bundle-wide
+Every child runs as its own stdio process and stores its documents under its own data directory, normally `${XDG_DATA_HOME:-~/.local/share}/mcp-servers/<name>/`. The proxy adds no document store. Individual tools may make public network requests, for example price, currency or backlink checks; read the relevant child's documentation. Your AI client or model provider has its own data handling.
 
-| Tool | What it does |
-|---|---|
-| `license_status` | Free/Pro status of every proxied server, and the bundle upgrade link |
-| `license_activate` | Activate one Pro bundle key across every server at once. Returns an error with a per-child table unless all of them accepted it |
-
-Resources and prompts registered by any child (for example time-tracker's `timetracker://today` resource and `daily_standup` prompt) are also proxied under their original names.
-
-### Renamed tools
-
-Two children can register the same tool name, invoice and docx both have `business_set`. The bundle then exposes both, prefixed with the server they came from (`invoice_business_set`, `docx_business_set`), names the renames once on startup, and **rewrites the child's own answer** so a response that said "Run `business_set` ..." says the name you can actually call. The full mapping is published as the `office://tools_map` resource: exposed name -> `child.tool`, with the renamed pairs listed separately.
-
-## Free vs Pro
-
-Each child server keeps its own free tier exactly as documented in its own README (see each `servers/<name>/README.md`). This bundle changes nothing about those limits, it only changes how many config entries it takes to reach all of them.
-
-A single **bundle** Pro key ($39 one-time, lifetime) unlocks Pro on every server in the bundle, instead of buying each server's $19 key separately. Activate it once here and it is forwarded to every child.
-
-Get Pro: https://mcp.zovo.one/buy/bundle
-
-## Child processes
-
-Each child runs as its own stdio process. Two things the proxy does on their behalf:
-
-- **Their stderr is drained into ours**, one line at a time, tagged with the child it came from (`[invoice] ...`). A child's stderr is a pipe with a small OS buffer; left unread, a child that logged more than that buffer blocked in `write()` and the tool call it was answering never returned.
-- **A child that dies rejects its in-flight requests** before the suite tries to restart it, so a proxied call fails fast instead of hanging until the client's timeout, where a retry could repeat a mutation that had already been applied.
-
-## Privacy
-
-Every child server stores its data locally, in `${XDG_DATA_HOME:-~/.local/share}/mcp-servers/<name>/` per server. This bundle adds no storage of its own and sends nothing anywhere; it only pipes stdio between your MCP client and the child processes it starts on your own machine.
-
-## expense-tracker
-
-TODO: `servers/expense-tracker/dist` does not exist yet in this repository. Once that server is built and shipped, add it to `CHILDREN` in `src/index.ts`, its dependency to `package.json`, its build step to the Dockerfile, and its tool table to this README.
-
----
-
-Built by theluckystrike (https://github.com/theluckystrike).
-
-## Use these docs as an MCP server
-
-Any MCP client (Claude, Cursor, Windsurf, VS Code) can read this repository's documentation directly via GitMCP — no install:
-
-- Docs MCP URL: https://gitmcp.io/theluckystrike/mcp-office-suite
+Child stderr is drained into the proxy's stderr with the child name. An unexpected child exit rejects pending requests and gets one restart attempt; an interrupted mutation must be checked before retrying it.
