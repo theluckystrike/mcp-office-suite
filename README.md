@@ -41,13 +41,13 @@ Read-only mirror of [mcp-servers/servers/office-suite](https://github.com/theluc
 
 <!-- mirror-seo:end -->
 
-Run the freelancer office from one MCP config entry. The v0.22.8 bundle initializes 49 local child servers and exposes 447 tools, measured over MCP on 2026-10-16. It includes time tracking, invoices, spreadsheets, quotes, expenses and the supplier-invoice three-way matcher and duplicate invoice candidate review. The proxy forwards tools, resources and prompts to the child that owns them; each child keeps its own storage and free tier.
+Run the freelancer office from one MCP config entry. The v0.22.9 bundle initializes 49 local child servers and exposes 447 tools, measured over MCP on 2026-10-16. It includes time tracking, invoices, spreadsheets, quotes, expenses and the supplier-invoice three-way matcher and duplicate invoice candidate review. The proxy forwards tools, resources and prompts to the child that owns them; each child keeps its own storage and free tier.
 
 Built by [theluckystrike](https://github.com/theluckystrike). MIT. Support: support@zovo.one.
 
 ## Install
 
-For Claude Desktop, download [office-suite.mcpb v0.22.8](https://github.com/theluckystrike/mcp-servers/releases/download/v0.22.8/office-suite.mcpb) and open it. SHA-256: `7f50d6d16d445dddcee054b24e8586de4daff9d91b77d22a28730647305cc91d`.
+For Claude Desktop, download [office-suite.mcpb v0.22.9](https://github.com/theluckystrike/mcp-servers/releases/download/v0.22.9/office-suite.mcpb) and open it. Verify it using the release's [SHA256SUMS.txt](https://github.com/theluckystrike/mcp-servers/releases/download/v0.22.9/SHA256SUMS.txt).
 
 The [download catalog](https://mcp.zovo.one/downloads#office-suite) lists explicit archive versions. The latest GitHub release is not a complete collection of all server bundles. This proxy is local stdio only; it has no hosted endpoint. Its npm package and internal dependencies are not published, so use the bundle or build from source.
 
@@ -92,7 +92,7 @@ Restart the client, call `license_status`, and read `office://tools_map` to disc
 
 When child names collide, the proxy exposes names prefixed with the child, such as `invoice_business_set`. Child result payloads, including JSON source records, raw CSV, HTML and prose, retain their original values. Each forwarded result adds collision mappings under `_meta["office-suite/tool-names"]` and points to `office://tools_map`; explicit retrieval tool hints in matcher report envelopes use the exposed names. Read the runtime map rather than guessing a prefix or relying on an older static tool table.
 
-The v0.22.8 manifest's 447 names and descriptions match the actual running bundle, including collision prefixes. [Measured inventory](https://github.com/theluckystrike/mcp-servers/blob/main/data/office-suite-tool-inventory.json) and [artifact evidence](https://github.com/theluckystrike/mcp-servers/blob/main/intel/R37-patch-release-integration.md) are available. This verifies discovery and matcher delivery through the proxy; it is not a feature test of every child tool.
+The v0.22.9 manifest's 447 names and descriptions match the actual running bundle, including collision prefixes. [Measured inventory](https://github.com/theluckystrike/mcp-servers/blob/main/data/office-suite-tool-inventory.json) and [artifact evidence](https://github.com/theluckystrike/mcp-servers/blob/main/intel/R37-sheetjs-artifacts.md) are available. This verifies discovery and matcher delivery through the proxy; it is not a feature test of every child tool.
 
 ## Free and Pro
 

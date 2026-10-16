@@ -16,56 +16,42 @@ Read, query and extend real spreadsheets from chat without ever touching the ori
 
 ## 60-second install
 
-npm publish for `@theluckystrike/mcp-spreadsheet` is pending. Until then, the `.mcpb` one-click bundle or a clone+build
-is the working path, both are verified below.
+Use [**spreadsheet.mcpb v0.22.9**](https://github.com/theluckystrike/mcp-servers/releases/download/v0.22.9/spreadsheet.mcpb) in Claude Desktop. [Published checksums](https://github.com/theluckystrike/mcp-servers/releases/download/v0.22.9/SHA256SUMS.txt) and the [versioned download catalog](https://mcp.zovo.one/downloads#spreadsheet) identify the exact release. The npm package is not published.
 
-One-click (.mcpb): download `spreadsheet.mcpb` from the latest release and double-click it in Claude Desktop:
-https://github.com/theluckystrike/mcp-servers/releases/latest
-
-(`claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "spreadsheet": {
-      "command": "npx",
-      "args": ["-y", "@theluckystrike/mcp-spreadsheet"]
-    }
-  }
-}
-```
-
-Claude Code:
+For a source installation, use Node.js 22 or newer and build the shared dependency first:
 
 ```sh
-claude mcp add spreadsheet -- npx -y @theluckystrike/mcp-spreadsheet
-```
-
-(`.cursor/mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "spreadsheet": {
-      "command": "npx",
-      "args": ["-y", "@theluckystrike/mcp-spreadsheet"]
-    }
-  }
-}
-```
-
-The `npx` form above starts working the moment the package is published. Until then, use the .mcpb bundle above, or
-build from source with exactly these three commands:
-
-```sh
-git clone https://github.com/theluckystrike/mcp-servers.git && cd mcp-servers
-npm install
+git clone https://github.com/theluckystrike/mcp-servers.git
+cd mcp-servers
+npm ci
+node scripts/bootstrap-timezone.mjs
 npm run build -w packages/mcp-license -w servers/spreadsheet
 ```
 
-Then point your client's `command` at `node` with one arg: the absolute path to `servers/spreadsheet/dist/index.js`.
+Merge this entry into Claude Desktop's `mcpServers`, or into `.cursor/mcp.json` for Cursor. Replace the absolute path with your checkout:
+
+```json
+{
+  "mcpServers": {
+    "spreadsheet": {
+      "command": "node",
+      "args": ["/absolute/path/mcp-servers/servers/spreadsheet/dist/index.js"]
+    }
+  }
+}
+```
+
+For Claude Code:
+
+```sh
+claude mcp add spreadsheet -- node /absolute/path/mcp-servers/servers/spreadsheet/dist/index.js
+```
 
 To run in Pro mode set `MCP_LICENSE_KEY` in the same config block, or call `license_activate` once with your key.
+
+## Spreadsheet update
+
+Version 0.22.9 uses the vendor's patched SheetJS 0.20.3. Numeric date cells now follow the time actually stored in the workbook. Some numeric-date files produced by older versions can display 30 seconds differently in historical-offset timezones such as Ho Chi Minh. No guessed offset is added to your data. Reading does not rewrite the source file.
 
 ## Tools
 
